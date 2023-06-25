@@ -1,5 +1,6 @@
 [Unit]
 Description=Offline System Upgrade using Pamac
+ConditionACPower=true
 ConditionPathExists=/system-update
 Documentation=http://www.freedesktop.org/wiki/Software/systemd/SystemUpdates
 
