@@ -27,12 +27,14 @@ namespace Pamac {
 		Cancellable cancellable;
 		GenericSet<string?> already_checked_aur_dep;
 		public Subprocess pkttyagent;
+		int term_width;
 
 		public Cli () {
 			exit_status = 0;
 			trans_cancellable = false;
 			cloning = false;
 			cancellable = new Cancellable ();
+			term_width = get_term_width ();
 			// watch CTRl + C
 			Unix.signal_add (Posix.Signal.INT, trans_cancel, Priority.HIGH);
 		}
@@ -137,7 +139,11 @@ namespace Pamac {
 							display_search_help ();
 							return;
 						}
-						database.config.enable_aur = true;
+						if (!database.config.support_aur) {
+							warning ("AUR not supported");
+						} else {
+							database.config.enable_aur = true;
+						}
 					}
 					if (no_aur) {
 						database.config.enable_aur = false;
@@ -197,7 +203,11 @@ namespace Pamac {
 							display_info_help ();
 							return;
 						}
-						database.config.enable_aur = true;
+						if (!database.config.support_aur) {
+							warning ("AUR not supported");
+						} else {
+							database.config.enable_aur = true;
+						}
 					}
 					if (no_aur) {
 						database.config.enable_aur = false;
@@ -299,6 +309,11 @@ namespace Pamac {
 					list_installed (false);
 				}
 			} else if (args[1] == "clone") {
+				init_database ();
+				if (!database.config.support_aur) {
+					warning ("AUR not supported");
+					return;
+				}
 				if (args.length > 2) {
 					bool overwrite = false;
 					bool recurse = false;
@@ -328,7 +343,6 @@ namespace Pamac {
 						display_clone_help ();
 						return;
 					}
-					init_database ();
 					database.config.enable_aur = true;
 					get_aur_dest_variable ();
 					if (builddir != null) {
@@ -339,6 +353,11 @@ namespace Pamac {
 					display_clone_help ();
 				}
 			} else if (args[1] == "build") {
+				init_database ();
+				if (!database.config.support_aur) {
+					warning ("AUR not supported");
+					return;
+				}
 				bool no_clone = false;
 				bool no_confirm = false;
 				bool keep = false;
@@ -717,8 +736,12 @@ namespace Pamac {
 						display_checkupdates_help ();
 						return;
 					}
-					database.config.enable_aur = true;
-					database.config.check_aur_updates = true;
+					if (!database.config.support_aur) {
+						warning ("AUR not supported");
+					} else {
+						database.config.enable_aur = true;
+						database.config.check_aur_updates = true;
+					}
 				}
 				if (no_aur) {
 					if (devel) {
@@ -726,8 +749,6 @@ namespace Pamac {
 						return;
 					}
 					database.config.enable_aur = false;
-					database.config.check_aur_updates = false;
-					database.config.check_aur_vcs_updates = false;
 				}
 				if (devel) {
 					if (no_devel) {
@@ -805,8 +826,12 @@ namespace Pamac {
 						display_upgrade_help ();
 						return;
 					}
-					database.config.enable_aur = true;
-					database.config.check_aur_updates = true;
+					if (!database.config.support_aur) {
+						warning ("AUR not supported");
+					} else {
+						database.config.enable_aur = true;
+						database.config.check_aur_updates = true;
+					}
 				}
 				if (no_aur) {
 					if (devel) {
@@ -814,8 +839,6 @@ namespace Pamac {
 						return;
 					}
 					database.config.enable_aur = false;
-					database.config.check_aur_updates = false;
-					database.config.check_aur_vcs_updates = false;
 				}
 				if (devel) {
 					if (no_devel) {
@@ -827,7 +850,7 @@ namespace Pamac {
 				if (no_devel) {
 					database.config.check_aur_vcs_updates = false;
 				}
-				if (database.config.check_aur_updates) {
+				if (database.config.support_aur && database.config.check_aur_updates) {
 					if (Posix.geteuid () == 0) {
 						// building as root
 						stdout.printf ("%s: %s\n", dgettext (null, "Warning"), dgettext (null, "Building packages as dynamic user"));
@@ -921,6 +944,7 @@ namespace Pamac {
 
 		void init_database () {
 			var config = new Config ("/etc/pamac.conf");
+			config.enable_appstream = false;
 			// not supported yet
 			config.enable_snap = false;
 			config.enable_flatpak = false;
@@ -1025,7 +1049,6 @@ namespace Pamac {
 			if (str == null)  {
 				return splitted;
 			}
-			int term_width = get_term_width ();
 			if (width == 0) {
 				width = term_width;
 			}
@@ -1034,6 +1057,9 @@ namespace Pamac {
 			}
 			int str_length = str.length;
 			int available_width = width - margin;
+			if (available_width < 10) {
+				available_width = 10;
+			}
 			if (available_width >= str_length) {
 				splitted.add (str);
 				return splitted;
@@ -1104,7 +1130,7 @@ namespace Pamac {
 		}
 
 		void display_version () {
-			stdout.printf ("Pamac %s  -  libpamac %s\n", VERSION, Pamac.get_version ());
+			stdout.printf ("pamac-cli %s  -  libpamac %s\n", VERSION, Pamac.get_version ());
 			stdout.printf ("Copyright © 2019-2023 Guillaume Benoit\n");
 			stdout.printf ("This program is free software, you can redistribute it under the terms of the GNU GPL.\n");
 		}
@@ -1572,54 +1598,41 @@ namespace Pamac {
 				}
 				return;
 			}
-			int version_length = 0;
-			int repo_length = 0;
-			foreach (unowned AlpmPackage pkg in pkgs) {
-				int pkg_version_length = pkg.version.length;
-				if (pkg_version_length > version_length) {
-					version_length = pkg_version_length;
-				}
-				unowned string? repo = pkg.repo;
-				if (repo != null) {
-					int pkg_repo_length = repo.length;
-					if (pkg_repo_length > repo_length) {
-						repo_length = pkg_repo_length;
-					}
-				}
-			}
-			int available_width = get_term_width () - (version_length + repo_length + 4);
-			int installed_available_width = 0;
+			int installed_width = 0;
 			string installed = null;
 			if (print_installed) {
 				installed = "[%s]".printf (dgettext (null, "Installed"));
-				installed_available_width = available_width - (installed.char_count () + 1);
+				installed_width = installed.char_count () + 1;
 			}
 			// print in reverse order
 			int length = pkgs.length;
 			for (int i = length - 1; i >= 0; i--) {
 				unowned AlpmPackage pkg = pkgs[i];
-				var str_builder = new StringBuilder (pkg.name);
+				unowned string pkg_name = pkg.name;
+				unowned string pkg_version = pkg.version;
+				string repo = pkg.repo ?? "";
+				int available_width = term_width - (pkg_name.length + pkg_version.length + 4);
+				var str_builder = new StringBuilder (pkg_name);
+				str_builder.append ("  ");
+				str_builder.append (pkg_version);
 				str_builder.append (" ");
-				int diff = 0;
 				if (print_installed && pkg.installed_version != null) {
-					diff = installed_available_width - pkg.name.length;
-				} else {
-					diff = available_width - pkg.name.length;
+					available_width = available_width - installed_width;
+					str_builder.append (installed);
+					str_builder.append (" ");
 				}
+				str_builder.append (" ");
+				int diff = available_width - repo.length;
 				if (diff > 0) {
 					while (diff > 0) {
 						str_builder.append (" ");
 						diff--;
 					}
 				}
-				if (print_installed && pkg.installed_version != null) {
-					str_builder.append (installed);
-					str_builder.append (" ");
-				}
-				string repo = pkg.repo ?? "";
-				str_builder.append ("%-*s  %s \n".printf (version_length, pkg.version, repo));
+				str_builder.append (repo);
+				str_builder.append ("\n");
 				stdout.printf (str_builder.str);
-				GenericArray<string> cuts = split_string (pkg.desc, 4, available_width);
+				GenericArray<string> cuts = split_string (pkg.desc, 4, term_width - 4);
 				foreach (unowned string cut in cuts) {
 					print_aligned ("", cut, 4);
 				}
@@ -1699,7 +1712,7 @@ namespace Pamac {
 			}
 		}
 
-		void display_pkg_infos (AlpmPackage? pkg, AURPackage? aur_pkg, string[] properties, int max_length) {
+		void display_pkg_infos (AlpmPackage pkg, AURPackage? aur_pkg, string[] properties, int max_length) {
 			// Name
 			print_property (properties[0], pkg.name, max_length);
 			if (aur_pkg != null) {
@@ -1777,10 +1790,12 @@ namespace Pamac {
 			// Conflicts
 			print_property_list (properties[16], pkg.conflicts, max_length);
 			// Packager
-			if (pkg.packager != null) {
-				print_property (properties[17], pkg.packager, max_length);
-			} else {
-				print_property (properties[17], dgettext (null, "Unknown"), max_length);
+			if (installed_version != null || aur_pkg == null) {
+				if (pkg.packager != null) {
+					print_property (properties[17], pkg.packager, max_length);
+				} else {
+					print_property (properties[17], dgettext (null, "Unknown"), max_length);
+				}
 			}
 			if (aur_pkg != null) {
 				// Maintainer

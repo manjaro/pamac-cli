@@ -73,7 +73,7 @@ namespace Pamac {
 			return status;
 		}
 
-		public int get_term_width () {
+		int get_term_width () {
 			int width = 80;
 			Linux.winsize win;
 			if (Linux.ioctl (Posix.STDOUT_FILENO, Linux.Termios.TIOCGWINSZ, out win) == 0) {
@@ -346,12 +346,18 @@ namespace Pamac {
 			return false;
 		}
 
-		protected override async bool ask_import_key (string pkgname, string key, string owner) {
+		protected override async bool ask_import_key (string pkgname, string key, string? owner) {
 			stdout.printf ("%s.\n".printf (dgettext (null, "The PGP key %1$s is needed to verify %2$s source files").printf (key, pkgname)));
 			if (no_confirm) {
 				return true;
 			}
-			return ask_user (dgettext (null, "Trust %s and import the PGP key").printf (owner));
+			string question;
+			if (owner == null) {
+				question = dgettext (null, "Import the PGP key");
+			} else {
+				question = dgettext (null, "Trust %s and import the PGP key").printf (owner);
+			}
+			return ask_user (question);
 		}
 
 		protected override async bool ask_edit_build_files (TransactionSummary summary) {
