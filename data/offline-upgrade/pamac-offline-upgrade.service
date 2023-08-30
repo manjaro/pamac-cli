@@ -7,6 +7,8 @@ Documentation=http://www.freedesktop.org/wiki/Software/systemd/SystemUpdates
 DefaultDependencies=no
 After=plymouth-poweroff.service plymouth-reboot.service
 Before=umount.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 # We are done when the script exits, not before
