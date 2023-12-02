@@ -19,7 +19,7 @@ StandardOutput=tty
 ExecStartPre=-/usr/bin/plymouth change-mode --updates
 ExecStartPre=/usr/bin/rm /system-update
 ExecStartPost=-/usr/bin/plymouth system-update --progress=50
-ExecStart=/usr/bin/pamac upgrade --no-aur --no-confirm
+ExecStart=/usr/bin/pamac upgrade --no-aur --no-refresh --no-confirm
 ExecStartPost=-/usr/bin/plymouth system-update --progress=100
 ExecStartPost=-/usr/bin/sleep 2
 
