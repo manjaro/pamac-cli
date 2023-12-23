@@ -19,7 +19,7 @@ Display pamac help
 *pamac <<_search,search>>* [options] <package(s)>::
 Search for packages or files, multiple search terms can be specified
 
-*pamac <<_list,list>>* [options] <package(s)>::
+*pamac <<_list,list>>* [options]::
 List packages, groups, repositories or files
 
 *pamac <<_info,info>>* [options] <package(s)>::

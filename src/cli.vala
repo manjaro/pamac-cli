@@ -1162,7 +1162,6 @@ namespace Pamac {
 										"remove"};
 			string[] targets_actions = {"search",
 										"info",
-										"list",
 										"install",
 										"reinstall",
 										"build",
