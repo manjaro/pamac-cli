@@ -2,7 +2,7 @@ gobject = dependency('gobject-2.0')
 gio = dependency('gio-2.0')
 gio_unix = dependency('gio-unix-2.0')
 
-libpamac = dependency('pamac', version : '>=11.6')
+libpamac = dependency('pamac', version : '>=11.7')
 
 common_vala_args = ['--pkg=posix', '--vapidir=' + join_paths(meson.source_root(), 'vapi')]
 common_c_args = ['-DGETTEXT_PACKAGE="pamac"']

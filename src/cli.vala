@@ -704,7 +704,6 @@ namespace Pamac {
 				bool no_devel = false;
 				bool refresh_tmp_files_dbs = false;
 				bool download_updates = false;
-				bool use_timestamp = false;
 				string? builddir = null;
 				try {
 					var options = new OptionEntry[10];
@@ -717,7 +716,6 @@ namespace Pamac {
 					options[6] = { "builddir", 0, 0, OptionArg.STRING, ref builddir, null, null };
 					options[7] = { "refresh-tmp-files-dbs", 0, 0, OptionArg.NONE, ref refresh_tmp_files_dbs, null, null };
 					options[8] = { "download-updates", 0, 0, OptionArg.NONE, ref download_updates, null, null };
-					options[9] = { "use-timestamp", 0, 0, OptionArg.NONE, ref use_timestamp, null, null };
 					var opt_context = new OptionContext (null);
 					opt_context.set_help_enabled (false);
 					opt_context.add_main_entries (options, null);
@@ -772,7 +770,7 @@ namespace Pamac {
 						}
 					}
 				}
-				checkupdates (quiet, refresh_tmp_files_dbs, download_updates, use_timestamp);
+				checkupdates (quiet, refresh_tmp_files_dbs, download_updates);
 			} else if (args[1] == "update" || args[1] == "upgrade") {
 				bool aur = false;
 				bool no_aur = false;
@@ -1131,7 +1129,7 @@ namespace Pamac {
 
 		void display_version () {
 			stdout.printf ("pamac-cli %s  -  libpamac %s\n", VERSION, Pamac.get_version ());
-			stdout.printf ("Copyright © 2019-2023 Guillaume Benoit\n");
+			stdout.printf ("Copyright © 2019-2024 Guillaume Benoit\n");
 			stdout.printf ("This program is free software, you can redistribute it under the terms of the GNU GPL.\n");
 		}
 
@@ -2040,8 +2038,8 @@ namespace Pamac {
 			}
 		}
 
-		void checkupdates (bool quiet, bool refresh_tmp_files_dbs, bool download_updates, bool use_timestamp) {
-			var updates = database.get_updates (use_timestamp);
+		void checkupdates (bool quiet, bool refresh_tmp_files_dbs, bool download_updates) {
+			var updates = database.get_updates ();
 			uint updates_nb = updates.repos_updates.length + updates.aur_updates.length + updates.flatpak_updates.length;
 			if (updates_nb == 0) {
 				if (quiet) {
