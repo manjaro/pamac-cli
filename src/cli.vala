@@ -129,7 +129,7 @@ namespace Pamac {
 						display_search_help ();
 						return;
 					}
-					init_database ();
+					init_transaction ();
 					if (files) {
 						search_files (args[2:args.length], quiet);
 						return;
@@ -197,7 +197,7 @@ namespace Pamac {
 						display_info_help ();
 						return;
 					}
-					init_database ();
+					init_transaction ();
 					if (aur) {
 						if (no_aur) {
 							display_info_help ();
@@ -249,7 +249,7 @@ namespace Pamac {
 						display_list_help ();
 						return;
 					}
-					init_database ();
+					init_transaction ();
 					if (installed) {
 						if (orphans) {
 							list_orphans (quiet);
@@ -305,7 +305,7 @@ namespace Pamac {
 						display_list_help ();
 					}
 				} else {
-					init_database ();
+					init_transaction ();
 					list_installed (false);
 				}
 			} else if (args[1] == "clone") {
@@ -343,6 +343,7 @@ namespace Pamac {
 						display_clone_help ();
 						return;
 					}
+					init_transaction ();
 					database.config.enable_aur = true;
 					get_aur_dest_variable ();
 					if (builddir != null) {
@@ -728,7 +729,7 @@ namespace Pamac {
 					display_checkupdates_help ();
 					return;
 				}
-				init_database ();
+				init_transaction ();
 				if (aur) {
 					if (no_aur) {
 						display_checkupdates_help ();
@@ -991,11 +992,6 @@ namespace Pamac {
 					stdout.printf ("%s: %s\n", dgettext (null, "Error"), e.message);
 				}
 			}
-			var loop = new MainLoop ();
-			transaction.check_dbs.begin ((obj, res) => {
-				loop.quit ();
-			});
-			loop.run ();
 		}
 
 		bool trans_cancel () {

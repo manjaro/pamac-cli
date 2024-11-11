@@ -43,6 +43,12 @@ namespace Pamac {
 			emit_script_output.connect (on_emit_script_output);
 			emit_warning.connect (print_warning);
 			emit_error.connect (print_error);
+			// check_dbs
+			var loop = new MainLoop ();
+			check_dbs.begin ((obj, res) => {
+				loop.quit ();
+			});
+			loop.run ();
 		}
 
 		protected override async int run_cmd_line_async (GenericArray<string> args, string? working_directory, Cancellable cancellable) {
