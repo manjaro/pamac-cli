@@ -220,14 +220,14 @@ namespace Pamac {
 				}
 				uint nb;
 				uint[] numbers = {};
-				// remvove trailing newline
+				// remove trailing newline
 				ans = ans.replace ("\n", "");
 				// just return use default
 				if (ans == "") {
 					break;
 				} else {
-					// split ","
-					string[] splitted = ans.split (",");
+					// split with commas "," and spaces " "
+					string[] splitted = ans.split_set (", ");
 					foreach (unowned string part in splitted) {
 						// check for range
 						if ("-" in part) {
@@ -312,7 +312,7 @@ namespace Pamac {
 					return 1;
 				}
 				int64 nb;
-				// remvove trailing newline
+				// remove trailing newline
 				ans = ans.replace ("\n", "");
 				// just return use default
 				if (ans == "") {

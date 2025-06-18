@@ -2515,7 +2515,7 @@ namespace Pamac {
 				}
 				uint nb;
 				var numbers = new GenericArray<uint> ();
-				// remvove trailing newline
+				// remove trailing newline
 				ans = ans.replace ("\n", "");
 				// just return use default
 				if (ans == "") {
@@ -2524,8 +2524,8 @@ namespace Pamac {
 					}
 					break;
 				} else {
-					// split ","
-					string[] splitted = ans.split (",");
+					// split with commas "," and spaces " "
+					string[] splitted = ans.split_set (", ");
 					foreach (unowned string part in splitted) {
 						// check for range
 						if ("-" in part) {
