@@ -129,11 +129,7 @@ namespace Pamac {
 						display_search_help ();
 						return;
 					}
-					init_transaction ();
-					if (files) {
-						search_files (args[2:args.length], quiet);
-						return;
-					}
+					init_database ();
 					if (aur) {
 						if (no_aur) {
 							display_search_help ();
@@ -147,6 +143,11 @@ namespace Pamac {
 					}
 					if (no_aur) {
 						database.config.enable_aur = false;
+					}
+					init_transaction ();
+					if (files) {
+						search_files (args[2:args.length], quiet);
+						return;
 					}
 					if (installed) {
 						if (repos) {
@@ -197,7 +198,7 @@ namespace Pamac {
 						display_info_help ();
 						return;
 					}
-					init_transaction ();
+					init_database ();
 					if (aur) {
 						if (no_aur) {
 							display_info_help ();
@@ -212,6 +213,7 @@ namespace Pamac {
 					if (no_aur) {
 						database.config.enable_aur = false;
 					}
+					init_transaction ();
 					display_pkgs_infos (args[2:args.length]);
 				} else {
 					display_info_help ();
@@ -343,12 +345,12 @@ namespace Pamac {
 						display_clone_help ();
 						return;
 					}
-					init_transaction ();
 					database.config.enable_aur = true;
 					get_aur_dest_variable ();
 					if (builddir != null) {
 						database.config.aur_build_dir = builddir;
 					}
+					init_transaction ();
 					clone_build_files (args[2:args.length], overwrite, recurse, quiet);
 				} else {
 					display_clone_help ();
@@ -388,8 +390,8 @@ namespace Pamac {
 						return;
 					}
 				}
-				init_transaction ();
 				database.config.enable_aur = true;
+				init_transaction ();
 				if (no_confirm) {
 					transaction.no_confirm = true;
 				}
@@ -729,7 +731,7 @@ namespace Pamac {
 					display_checkupdates_help ();
 					return;
 				}
-				init_transaction ();
+				init_database ();
 				if (aur) {
 					if (no_aur) {
 						display_checkupdates_help ();
@@ -771,6 +773,7 @@ namespace Pamac {
 						}
 					}
 				}
+				init_transaction ();
 				checkupdates (quiet, refresh_tmp_files_dbs, download_updates);
 			} else if (args[1] == "update" || args[1] == "upgrade") {
 				bool aur = false;
@@ -816,10 +819,7 @@ namespace Pamac {
 					display_upgrade_help ();
 					return;
 				}
-				init_transaction ();
-				if (dry_run) {
-					transaction.dry_run = true;
-				}
+				init_database ();
 				if (aur) {
 					if (no_aur) {
 						display_upgrade_help ();
@@ -870,6 +870,10 @@ namespace Pamac {
 				}
 				if (disable_downgrade) {
 					database.config.enable_downgrade = false;
+				}
+				init_transaction ();
+				if (dry_run) {
+					transaction.dry_run = true;
 				}
 				if (ignore != null) {
 					foreach (unowned string name in ignore.split(",")) {
@@ -2125,7 +2129,6 @@ namespace Pamac {
 				}
 				// download updates
 				if (download_updates) {
-					transaction = new TransactionCli (database);
 					var loop = new MainLoop ();
 					transaction.download_updates_async.begin (() => {
 						loop.quit ();
