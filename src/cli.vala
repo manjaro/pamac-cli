@@ -44,6 +44,10 @@ namespace Pamac {
 				display_help ();
 				return;
 			}
+			if (Posix.geteuid () == 0) {
+			stdout.printf ("%s\n",  dgettext (null, "Please do not run pamac with 'sudo' or as root."));
+			Process.exit(0);
+			}
 			bool help = false;
 			bool version = false;
 			try {
