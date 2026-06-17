@@ -74,12 +74,13 @@ _pamac()
 
             checkupdates)
                 COMPREPLY=( $( compgen -W '
-                  --builddir 
+                  --builddir
                   -a --aur
                   --no-aur
                   -q --quiet
                   --devel
                   --no-devel
+                  --aur-update-delay
                   ' -- "$cur" ) )
                 return 0
                 ;;
@@ -196,6 +197,7 @@ _pamac()
                   --no-confirm
                   --no-devel
                   --overwrite
+                  --aur-update-delay
                   ' -- "$cur" ) )
                 return 0
                 ;;

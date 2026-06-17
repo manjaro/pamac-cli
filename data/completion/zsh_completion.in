@@ -59,6 +59,7 @@ _pamac_opts_checkupdates=(
   {-q,--quiet}'[only print one line per update]'
   "--devel[also check development packages updates (use with --aur)]"
   "--no-devel[do not check development packages updates]"
+  "--aur-update-delay[number of days to wait before showing AUR updates (0 to disable)]:days:"
 )
 
 _pamac_checkupdates() {
@@ -214,6 +215,7 @@ _pamac_opts_updategrade=(
   "--devel[also upgrade development packages (use with --aur)]"
   "--no-devel[do not upgrade development packages]"
   "--builddir[build directory (use with --aur), if no directory is given the one specified in pamac.conf file is used]:dir:_files"
+  "--aur-update-delay[number of days to wait before showing AUR updates (0 to disable)]:days:"
 )
 
 _pamac_updategrade() {

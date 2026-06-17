@@ -51,6 +51,10 @@ Options
 *CheckAURVCSUpdates*::
 	When check updates from AUR support is enabled check for vcs updates.
 
+*AURUpdateDelayDays =* number::
+	Number of days to wait before showing AUR updates.
+	If set to 0 the delay is disabled.
+
 *BuildDirectory =* /path/to/builddir::
 	The location of the directory where AUR build files are cloned and packages built.
 	This configuration is overriden by the AURDEST environment variable.

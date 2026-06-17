@@ -708,8 +708,9 @@ namespace Pamac {
 				bool refresh_tmp_files_dbs = false;
 				bool download_updates = false;
 				string? builddir = null;
+				int64 aur_update_delay = -1;
 				try {
-					var options = new OptionEntry[10];
+					var options = new OptionEntry[11];
 					options[0] = { "help", 'h', 0, OptionArg.NONE, ref help, null, null };
 					options[1] = { "quiet", 'q', 0, OptionArg.NONE, ref quiet, null, null };
 					options[2] = { "aur", 'a', 0, OptionArg.NONE, ref aur, null, null };
@@ -719,6 +720,7 @@ namespace Pamac {
 					options[6] = { "builddir", 0, 0, OptionArg.STRING, ref builddir, null, null };
 					options[7] = { "refresh-tmp-files-dbs", 0, 0, OptionArg.NONE, ref refresh_tmp_files_dbs, null, null };
 					options[8] = { "download-updates", 0, 0, OptionArg.NONE, ref download_updates, null, null };
+					options[9] = { "aur-update-delay", 0, 0, OptionArg.INT64, ref aur_update_delay, null, null };
 					var opt_context = new OptionContext (null);
 					opt_context.set_help_enabled (false);
 					opt_context.add_main_entries (options, null);
@@ -761,6 +763,9 @@ namespace Pamac {
 				if (no_devel) {
 					database.config.check_aur_vcs_updates = false;
 				}
+				if (aur_update_delay >= 0) {
+					database.config.aur_update_delay_days = (uint64) aur_update_delay;
+				}
 				if (database.config.check_aur_vcs_updates) {
 					if (Posix.geteuid () == 0) {
 						// checking as root
@@ -790,8 +795,9 @@ namespace Pamac {
 				string? ignore = null;
 				bool dry_run = false;
 				bool no_refresh = false;
+				int64 aur_update_delay = -1;
 				try {
-					var options = new OptionEntry[15];
+					var options = new OptionEntry[16];
 					options[0] = { "help", 'h', 0, OptionArg.NONE, ref help, null, null };
 					options[1] = { "aur", 'a', 0, OptionArg.NONE, ref aur, null, null };
 					options[2] = { "no-aur", 0, 0, OptionArg.NONE, ref no_aur, null, null };
@@ -807,6 +813,7 @@ namespace Pamac {
 					options[12] = { "download-only", 'w', 0, OptionArg.NONE, ref download_only, null, null };
 					options[13] = { "dry-run", 'd', 0, OptionArg.NONE, ref dry_run, null, null };
 					options[14] = { "no-refresh", 0, 0, OptionArg.NONE, ref no_refresh, null, null };
+					options[15] = { "aur-update-delay", 0, 0, OptionArg.INT64, ref aur_update_delay, null, null };
 					var opt_context = new OptionContext (null);
 					opt_context.set_help_enabled (false);
 					opt_context.add_main_entries (options, null);
@@ -870,6 +877,9 @@ namespace Pamac {
 				}
 				if (disable_downgrade) {
 					database.config.enable_downgrade = false;
+				}
+				if (aur_update_delay >= 0) {
+					database.config.aur_update_delay_days = (uint64) aur_update_delay;
 				}
 				init_transaction ();
 				if (dry_run) {
@@ -1459,7 +1469,8 @@ namespace Pamac {
 								"  --no-aur",
 								"  --quiet, -q",
 								"  --devel",
-								"  --no-devel"};
+								"  --no-devel",
+								"  --aur-update-delay <%s>".printf (dgettext (null, "days"))};
 			foreach (unowned string option in options) {
 				int length = option.char_count ();
 				if (length > max_length) {
@@ -1471,7 +1482,8 @@ namespace Pamac {
 								dgettext (null, "do not check updates in AUR"),
 								dgettext (null, "only print one line per update"),
 								dgettext (null, "also check development packages updates (use with --aur)"),
-								dgettext (null, "do not check development packages updates")};
+								dgettext (null, "do not check development packages updates"),
+								dgettext (null, "number of days to wait before showing AUR updates (0 to disable)")};
 			int i = 0;
 			foreach (unowned string option in options) {
 				print_property (option, details[i], max_length);
@@ -1499,7 +1511,8 @@ namespace Pamac {
 								"  --no-aur",
 								"  --devel",
 								"  --no-devel",
-								"  --builddir <%s>".printf (dgettext (null, "dir"))};
+								"  --builddir <%s>".printf (dgettext (null, "dir")),
+								"  --aur-update-delay <%s>".printf (dgettext (null, "days"))};
 			foreach (unowned string option in options) {
 				int length = option.char_count ();
 				if (length > max_length) {
@@ -1519,7 +1532,8 @@ namespace Pamac {
 								dgettext (null, "do not upgrade packages installed from AUR"),
 								dgettext (null, "also upgrade development packages (use with --aur)"),
 								dgettext (null, "do not upgrade development packages"),
-								dgettext (null, "build directory (use with --aur), if no directory is given the one specified in pamac.conf file is used")};
+								dgettext (null, "build directory (use with --aur), if no directory is given the one specified in pamac.conf file is used"),
+								dgettext (null, "number of days to wait before showing AUR updates (0 to disable)")};
 			int i = 0;
 			foreach (unowned string option in options) {
 				print_property (option, details[i], max_length);

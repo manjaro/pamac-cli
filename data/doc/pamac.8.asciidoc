@@ -159,6 +159,7 @@ given the one specified in `pamac.conf` is used
 *--quiet, -q* ::: only print one line per update
 *--devel* ::: also check development packages updates (use with *--aur*)
 *--no-devel* ::: do not check development packages updates
+*--aur-update-delay* <days> ::: number of days to wait before showing AUR updates (0 to disable)
 
 Exit code is 100 if updates are available.
 
@@ -185,6 +186,7 @@ specified by separating them with comma
 *--no-devel* ::: do not upgrade development packages
 *--builddir* <dir> ::: build directory (use with *--aur*), if no directory is
 given the one specified in `pamac.conf` file is used
+*--aur-update-delay* <days> ::: number of days to wait before showing AUR updates (0 to disable)
 
 [[_clone]]
 === CLONE ===

@@ -39,6 +39,12 @@ __fish_pamac_subcommand upgrade -d 'Upgrade packages'
 
 __fish_pamac_subcommand update -d 'Update your system'
 
+# Checkupdates options
+complete -c pamac -n "__fish_seen_subcommand_from checkupdates" -l aur-update-delay -x -d 'number of days to wait before showing AUR updates (0 to disable)'
+
+# Update/Upgrade options
+complete -c pamac -n "__fish_seen_subcommand_from upgrade update" -l aur-update-delay -x -d 'number of days to wait before showing AUR updates (0 to disable)'
+
 __fish_pamac_subcommand list -r -d 'List packages, groups, repositories or files'
 
 __fish_pamac_subcommand clone -r -d 'Clone or sync packages build files from AUR'
