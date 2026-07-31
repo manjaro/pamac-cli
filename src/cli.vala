@@ -24,6 +24,7 @@ namespace Pamac {
 		Database database;
 		bool trans_cancellable;
 		bool cloning;
+		bool authorizing;
 		Cancellable cancellable;
 		GenericSet<string?> already_checked_aur_dep;
 		public Subprocess pkttyagent;
@@ -969,6 +970,11 @@ namespace Pamac {
 				init_database ();
 			}
 			transaction = new TransactionCli (database);
+			transaction.emit_error.connect ((message, details) => {
+				if (authorizing && details.length > 0) {
+					authorizing = false;
+				}
+			});
 			transaction.start_waiting.connect (() => {
 				trans_cancellable = true;
 			});
@@ -999,6 +1005,13 @@ namespace Pamac {
 		}
 
 		bool trans_cancel () {
+			if (authorizing) {
+				authorizing = false;
+				exit_status = 130;
+				transaction.cancel ();
+				stdout.printf ("\n");
+				return true;
+			}
 			if (cloning) {
 				cloning = false;
 				cancellable.cancel ();
@@ -2842,32 +2855,38 @@ namespace Pamac {
 				transaction.add_pkg_to_build (name, clone_build_files, clone_deps_build_files);
 			}
 			transaction.install_if_needed = false;
-			run_transaction ();
+			run_transaction (false);
 		}
 
-		void run_transaction () {
+		async bool run_transaction_async (bool authorization_required) {
+			if (Posix.geteuid () != 0 && !transaction.dry_run && authorization_required) {
+				authorizing = true;
+				while (authorizing) {
+					if (yield transaction.get_authorization_async ()) {
+						authorizing = false;
+						bool success = yield transaction.run_async ();
+						transaction.remove_authorization ();
+						return success;
+					}
+				}
+				return false;
+			}
+			return yield transaction.run_async ();
+		}
+
+		void run_transaction (bool authorization_required = true) {
 			var loop = new MainLoop ();
-			if (Posix.geteuid () != 0) {
-				// let's time to pkttyagent to get registred
-				Timeout.add (200, () => {
-					transaction.run_async.begin ((obj, res) => {
-						bool success = transaction.run_async.end (res);
-						if (!success) {
-							exit_status = 1;
-						}
-						loop.quit ();
-					});
-					return false;
-				});
-			} else {
-				transaction.run_async.begin ((obj, res) => {
-					bool success = transaction.run_async.end (res);
-					if (!success) {
+			uint delay = Posix.geteuid () == 0 ? 0 : 200;
+			Timeout.add (delay, () => {
+				run_transaction_async.begin (authorization_required, (obj, res) => {
+					bool success = run_transaction_async.end (res);
+					if (!success && exit_status == 0) {
 						exit_status = 1;
 					}
 					loop.quit ();
 				});
-			}
+				return false;
+			});
 			loop.run ();
 		}
 
