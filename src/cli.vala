@@ -2876,19 +2876,8 @@ namespace Pamac {
 
 		void run_transaction (bool authorization_required = true) {
 			var loop = new MainLoop ();
-			if (Posix.geteuid () != 0) {
-				// let's time to pkttyagent to get registred
-				Timeout.add (200, () => {
-					run_transaction_async.begin (authorization_required, (obj, res) => {
-						bool success = run_transaction_async.end (res);
-						if (!success && exit_status == 0) {
-							exit_status = 1;
-						}
-						loop.quit ();
-					});
-					return false;
-				});
-			} else {
+			uint delay = Posix.geteuid () == 0 ? 0 : 200;
+			Timeout.add (delay, () => {
 				run_transaction_async.begin (authorization_required, (obj, res) => {
 					bool success = run_transaction_async.end (res);
 					if (!success && exit_status == 0) {
@@ -2896,7 +2885,8 @@ namespace Pamac {
 					}
 					loop.quit ();
 				});
-			}
+				return false;
+			});
 			loop.run ();
 		}
 
