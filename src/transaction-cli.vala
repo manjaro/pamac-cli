@@ -21,6 +21,7 @@ namespace Pamac {
 	public class TransactionCli: Transaction {
 		string current_line;
 		string current_action;
+		bool action_progress_completed;
 		bool summary_shown;
 		bool commit_transaction_answer;
 		public bool no_confirm { get; set; }
@@ -32,6 +33,7 @@ namespace Pamac {
 		construct {
 			current_line = "";
 			current_action = "";
+			action_progress_completed = false;
 			summary_shown = false;
 			no_confirm = false;
 			commit_transaction_answer = false;
@@ -107,6 +109,7 @@ namespace Pamac {
 		void print_action (string action) {
 			display_current_line ();
 			current_line = "";
+			action_progress_completed = false;
 			stdout.printf (action);
 			stdout.printf ("\n");
 		}
@@ -137,23 +140,28 @@ namespace Pamac {
 		void print_action_progress (string action, string status, double progress) {
 			if (action != current_action) {
 				current_action = action;
+				action_progress_completed = false;
 				display_current_line ();
+			}
+			// Ignore all further callbacks for an already completed action.
+			if (action_progress_completed) {
+				return;
 			}
 			int width = get_term_width () - action.char_count () - 1;
 			string current_status = "[%s]".printf (status);
-			if (width > current_status.length) {
-				if (progress == 1) {
-					current_line = "";
+			bool can_redraw = Posix.isatty (Posix.STDOUT_FILENO) && width > current_status.length;
+			if (progress == 1) {
+				current_line = "";
+				if (can_redraw) {
 					stdout.printf ("%s %*s\n".printf (action, width, current_status));
 				} else {
-					current_line = "%s %*s".printf (action, width, current_status);
-					stdout.printf (current_line);
-					stdout.printf ("\r");
+					stdout.printf ("%s %s\n", action, current_status);
 				}
-			} else {
-				current_line = "%s %s".printf (action, current_status);
+				action_progress_completed = true;
+			} else if (can_redraw) {
+				current_line = "%s %*s".printf (action, width, current_status);
 				stdout.printf (current_line);
-				stdout.printf ("\n");
+				stdout.printf ("\r");
 			}
 			stdout.flush ();
 		}
