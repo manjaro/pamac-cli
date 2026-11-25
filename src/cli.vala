@@ -2534,6 +2534,10 @@ namespace Pamac {
 							uint beg_num, end_num;
 							if (uint.try_parse (splitted2[0], out beg_num)) {
 								if (uint.try_parse (splitted2[1], out end_num)) {
+									// clamp to avoid overflow and useless iterations
+									if (end_num > pkgs_length) {
+										end_num = pkgs_length;
+									}
 									nb = beg_num;
 									while (nb <= end_num) {
 										if (nb >= 1 && nb <= pkgs_length) {
