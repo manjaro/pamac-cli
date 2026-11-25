@@ -272,37 +272,44 @@ namespace Pamac {
 				// choose first provider
 				return 0;
 			}
-			var pkgs = new GenericArray<Package> ();
+			// keep one entry per provider (null if not found) so that
+			// the displayed numbers match the indexes in providers
+			var pkgs = new GenericArray<Package?> ();
 			foreach (unowned string provider in providers) {
-				var pkg = database.get_sync_pkg (provider);
+				Package? pkg = database.get_sync_pkg (provider);
 				if (pkg == null)  {
 					pkg = database.get_aur_pkg (provider);
 				}
-				if (pkg != null)  {
-					pkgs.add (pkg);
-				}
+				pkgs.add (pkg);
 			}
 			// print pkgs
 			int name_length = 0;
 			int version_length = 0;
-			foreach (unowned Package pkg in pkgs) {
-				if (pkg.name.length > name_length) {
-					name_length = pkg.name.length;
+			for (uint i = 0; i < providers.length; i++) {
+				unowned Package? pkg = pkgs[i];
+				unowned string name = pkg == null ? providers[i] : pkg.name;
+				if (name.length > name_length) {
+					name_length = name.length;
 				}
-				if (pkg.version.length > version_length) {
+				if (pkg != null && pkg.version.length > version_length) {
 					version_length = pkg.version.length;
 				}
 			}
 			int num_length = providers.length.to_string ().length + 1;
 			stdout.printf ("%s:\n".printf (dgettext (null, "Choose a provider for %s").printf (depend)));
-			int num = 1;
-			foreach (unowned Package pkg in pkgs) {
-				stdout.printf ("%*s  %-*s  %-*s  %s\n",
-								num_length, "%i:".printf (num),
-								name_length, pkg.name,
-								version_length, pkg.version,
-								pkg.repo);
-				num++;
+			for (uint i = 0; i < providers.length; i++) {
+				unowned Package? pkg = pkgs[i];
+				if (pkg == null) {
+					stdout.printf ("%*s  %s\n",
+									num_length, "%u:".printf (i + 1),
+									providers[i]);
+				} else {
+					stdout.printf ("%*s  %-*s  %-*s  %s\n",
+									num_length, "%u:".printf (i + 1),
+									name_length, pkg.name,
+									version_length, pkg.version,
+									pkg.repo ?? "");
+				}
 			}
 			// get user input
 			while (true) {
@@ -313,7 +320,8 @@ namespace Pamac {
 				string? ans = stdin.read_line  ();
 				if (ans == null) {
 					stdout.printf ("\n");
-					return 1;
+					// use default: first provider
+					return 0;
 				}
 				int64 nb;
 				// remove trailing newline
