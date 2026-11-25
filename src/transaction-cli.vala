@@ -366,7 +366,21 @@ namespace Pamac {
 
 		protected override async bool ask_import_key (string pkgname, string key, string? owner) {
 			stdout.printf ("%s.\n".printf (dgettext (null, "The PGP key %1$s is needed to verify %2$s source files").printf (key, pkgname)));
+			PGPKey? pgp_key = get_pgp_key (key);
+			if (pgp_key != null) {
+				// give all the informations needed to decide to trust the key
+				foreach (unowned string detail in pgp_key.get_details ()) {
+					stdout.printf ("  %s\n", detail);
+				}
+				foreach (unowned string warning in pgp_key.get_warnings ()) {
+					stdout.printf ("%s: %s.\n", dgettext (null, "Warning"), warning);
+				}
+			}
 			if (no_confirm) {
+				// never trust automatically a revoked key or another key than the requested one
+				if (pgp_key != null && (pgp_key.revoked || !pgp_key.match_key ())) {
+					return false;
+				}
 				return true;
 			}
 			string question;
