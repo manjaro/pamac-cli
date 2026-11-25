@@ -345,9 +345,9 @@ namespace Pamac {
 			stdout.printf ("%s ? %s ", question, dgettext (null, "[y/N]"));
 			stdout.flush ();
 			Posix.tcflush (stdin.fileno (), Posix.TCIFLUSH);
-			char buf[32];
-			if (stdin.gets (buf) != null) {
-				string ans = (string) buf;
+			// read the whole line so nothing is left in stdin buffer for the next question
+			string? ans = stdin.read_line ();
+			if (ans != null) {
 				// remove trailing newline and uppercase
 				ans = ans.replace ("\n", "").down ();
 				// just return use default
@@ -396,9 +396,9 @@ namespace Pamac {
 			stdout.printf ("%s ? %s ", dgettext (null, "Apply transaction"), dgettext (null, "[e/y/N]"));
 			stdout.flush ();
 			Posix.tcflush (stdin.fileno (), Posix.TCIFLUSH);
-			char buf[32];
-			if (stdin.gets (buf) != null) {
-				string ans = (string) buf;
+			// read the whole line so nothing is left in stdin buffer for the next question
+			string? ans = stdin.read_line ();
+			if (ans != null) {
 				// remove trailing newline and uppercase
 				ans = ans.replace ("\n", "").down ();
 				// just return use default
@@ -748,7 +748,7 @@ namespace Pamac {
 					if (pkg.installed_version != null && pkg.installed_version != pkg.version) {
 						installed_version = "(%s)".printf (pkg.installed_version);
 					}
-					if (installed_version == null) {
+					if (installed_version == "") {
 						// check for requiredby to display in place of installed_version
 						var alpm_pkg = pkg as AlpmPackage;
 						if (alpm_pkg != null) {
@@ -932,7 +932,7 @@ namespace Pamac {
 			} else {
 				foreach (unowned string pkgname in pkgnames) {
 					ask_view_diff (pkgname);
-					if (ask_user (dgettext (null, "Edit %s build files".printf (pkgname)))) {
+					if (ask_user (dgettext (null, "Edit %s build files").printf (pkgname))) {
 						yield edit_single_build_files (pkgname);
 					}
 				}

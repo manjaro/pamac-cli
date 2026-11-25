@@ -79,7 +79,7 @@ namespace Pamac {
 						display_remove_help ();
 					} else if (args[1] == "checkupdates") {
 						display_checkupdates_help ();
-					} else if (args[1] == "upgrade" || args[2] == "update") {
+					} else if (args[1] == "upgrade" || args[1] == "update") {
 						display_upgrade_help ();
 					} else if (args[1] == "clean") {
 						display_clean_help ();
@@ -314,6 +314,7 @@ namespace Pamac {
 				init_database ();
 				if (!database.config.support_aur) {
 					warning ("AUR not supported");
+					exit_status = 1;
 					return;
 				}
 				if (args.length > 2) {
@@ -359,6 +360,7 @@ namespace Pamac {
 				init_database ();
 				if (!database.config.support_aur) {
 					warning ("AUR not supported");
+					exit_status = 1;
 					return;
 				}
 				bool no_clone = false;
@@ -428,6 +430,7 @@ namespace Pamac {
 					if (!pkgbuild.query_exists ()) {
 						stdout.printf (dgettext (null, "No PKGBUILD file found in current directory"));
 						stdout.printf ("\n");
+						exit_status = 1;
 						return;
 					}
 					// set buildir to the parent dir
@@ -460,7 +463,10 @@ namespace Pamac {
 								build_pkgs (targets.data, false, !no_clone);
 							} catch (Error e) {
 								warning (e.message);
+								exit_status = 1;
 							}
+						} else {
+							exit_status = 1;
 						}
 					}
 				} else if (!no_clone) {
@@ -518,7 +524,10 @@ namespace Pamac {
 						return;
 					}
 					init_transaction ();
-					get_aur_dest_variable ();
+					// as root, AUR packages are built by a dynamic user in /var/cache/pamac
+					if (Posix.geteuid () != 0) {
+						get_aur_dest_variable ();
+					}
 					if (overwrite != null) {
 						foreach (unowned string glob in overwrite.split(",")) {
 							transaction.add_overwrite_file (glob);
@@ -928,7 +937,10 @@ namespace Pamac {
 					return;
 				}
 				init_transaction ();
-				get_aur_dest_variable ();
+				// as root, AUR packages are built by a dynamic user in /var/cache/pamac
+				if (Posix.geteuid () != 0) {
+					get_aur_dest_variable ();
+				}
 				if (keep >= 0) {
 					database.config.clean_keep_num_pkgs = keep;
 				}
@@ -1053,7 +1065,8 @@ namespace Pamac {
 			if (width > term_width) {
 				width = term_width;
 			}
-			int str_length = str.length;
+			// work with characters, not bytes, to not cut inside an UTF-8 character
+			int str_length = str.char_count ();
 			int available_width = width - margin;
 			if (available_width < 10) {
 				available_width = 10;
@@ -1063,23 +1076,28 @@ namespace Pamac {
 				return splitted;
 			}
 			int remain_length = str_length;
+			// offset in characters
 			int offset = 0;
 			while (remain_length >= available_width) {
-				string remain_string = str.substring (offset, remain_length);
-				string cutted_string = remain_string.substring (0, available_width);
+				long start = str.index_of_nth_char (offset);
+				long end = str.index_of_nth_char (offset + available_width);
+				string cutted_string = str.substring (start, end - start);
 				int cut_length = available_width;
+				int skip = 0;
 				// cut at word
 				int i = cutted_string.last_index_of_char (' ');
 				if (i != -1) {
-					cut_length = i;
-					cutted_string = remain_string.substring (0, i);
+					cutted_string = cutted_string.substring (0, i);
+					cut_length = cutted_string.char_count ();
+					// skip the space
+					skip = 1;
 				}
 				splitted.add ((owned) cutted_string);
-				offset += cut_length + 1;
-				remain_length -= cut_length + 1;
+				offset += cut_length + skip;
+				remain_length -= cut_length + skip;
 			}
 			if (remain_length > 0) {
-				splitted.add (str.substring (offset, remain_length));
+				splitted.add (str.substring (str.index_of_nth_char (offset)));
 			}
 			return splitted;
 		}
@@ -2106,7 +2124,7 @@ namespace Pamac {
 											name_length, pkg.name,
 											installed_version_length, pkg.installed_version,
 											version_length, pkg.version,
-											pkg.repo);
+											dgettext (null, "AUR"));
 						}
 					}
 					if (updates.outofdate.length != 0) {
@@ -2265,7 +2283,7 @@ namespace Pamac {
 						app_name = pkg.name;
 					}
 					stdout.printf ("%-*s  %-*s    %-*s  %s\n",
-									name_length, pkg.app_name,
+									name_length, app_name,
 									installed_version_length, "",
 									version_length, pkg.version,
 									pkg.repo);
@@ -2287,7 +2305,7 @@ namespace Pamac {
 										name_length, pkg.name,
 										installed_version_length, pkg.installed_version,
 										version_length, pkg.version,
-										pkg.repo);
+										dgettext (null, "AUR"));
 					}
 				}
 				if (updates.outofdate.length != 0) {
@@ -2392,7 +2410,7 @@ namespace Pamac {
 				// check for local or remote path
 				if (".pkg.tar" in target) {
 					if ("://" in target) {
-						if ("file://" in target) {
+						if (target.has_prefix ("file://")) {
 							// handle file:// uri
 							var file = File.new_for_uri (target);
 							string? absolute_path = file.get_path ();
@@ -2642,7 +2660,8 @@ namespace Pamac {
 						found = true;
 						var pkgs = database.get_group_pkgs (name);
 						foreach (unowned AlpmPackage pkg in pkgs) {
-							if (pkg.version == pkg.installed_version) {
+							// remove all installed members, whatever their version
+							if (pkg.installed_version != null) {
 								to_remove.add (pkg.name);
 								group_found = true;
 							}
@@ -2713,7 +2732,7 @@ namespace Pamac {
 				} else {
 					// clone build files
 					if (!quiet) {
-						stdout.printf (dgettext (null, "Cloning %s build files".printf (pkgname)) + "...\n");
+						stdout.printf (dgettext (null, "Cloning %s build files").printf (pkgname) + "...\n");
 					}
 					// use packagebase in case of split package
 					File? clone_dir = database.clone_build_files (aur_pkg.packagebase, overwrite, cancellable);
@@ -2814,17 +2833,20 @@ namespace Pamac {
 					// may be a virtual package
 					// use search and add results
 					var search_aur_pkgs = database.search_aur_pkgs (target);
-					bool iter_removed = false;
+					bool provider_found = false;
 					foreach (unowned AURPackage found_pkg in search_aur_pkgs) {
+						// check all provides of each result
 						foreach (unowned string dep_string in found_pkg.provides) {
 							string dep_name = database.get_alpm_dep_name (dep_string);
 							if (dep_name == target) {
-								checked_targets.add (target);
-								if (!iter_removed) {
-									not_found_iter.remove ();
-									iter_removed = true;
-								}
+								provider_found = true;
+								break;
 							}
+						}
+						if (provider_found) {
+							// add target only once
+							checked_targets.add (target);
+							not_found_iter.remove ();
 							break;
 						}
 					}
