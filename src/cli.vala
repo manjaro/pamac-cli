@@ -782,7 +782,7 @@ namespace Pamac {
 						}
 					}
 				}
-				init_transaction ();
+				// the transaction is initialized in checkupdates
 				checkupdates (quiet, refresh_tmp_files_dbs, download_updates);
 			} else if (args[1] == "update" || args[1] == "upgrade") {
 				bool aur = false;
@@ -2057,6 +2057,26 @@ namespace Pamac {
 		}
 
 		void checkupdates (bool quiet, bool refresh_tmp_files_dbs, bool download_updates) {
+			// get_updates only reads the local databases: synchronize them first,
+			// only the modified ones are downloaded
+			var loop = new MainLoop ();
+			if (quiet) {
+				// keep one line per update: refresh with a transaction without output,
+				// the cli transaction is created after because it would also
+				// receive the daemon signals and print them
+				var refresh_transaction = new Transaction (database);
+				refresh_transaction.refresh_dbs_async.begin (() => {
+					loop.quit ();
+				});
+				loop.run ();
+				init_transaction ();
+			} else {
+				init_transaction ();
+				transaction.refresh_dbs_async.begin (() => {
+					loop.quit ();
+				});
+				loop.run ();
+			}
 			var updates = database.get_updates ();
 			uint updates_nb = updates.repos_updates.length + updates.aur_updates.length + updates.flatpak_updates.length;
 			if (updates_nb == 0) {
@@ -2147,7 +2167,6 @@ namespace Pamac {
 				}
 				// download updates
 				if (download_updates) {
-					var loop = new MainLoop ();
 					transaction.download_updates_async.begin (() => {
 						loop.quit ();
 					});
