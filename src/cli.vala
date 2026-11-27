@@ -1603,7 +1603,7 @@ namespace Pamac {
 			print_search_pkgs (pkgs, true, quiet);
 		}
 
-		void print_search_pkgs (GenericArray<unowned AlpmPackage> pkgs, bool print_installed, bool quiet) {
+		void print_search_pkgs (GenericArray<AlpmPackage> pkgs, bool print_installed, bool quiet) {
 			if (quiet) {
 				// print in reverse order
 				uint length = pkgs.length;
@@ -1693,8 +1693,8 @@ namespace Pamac {
 				}
 			}
 			foreach (unowned string pkgname in pkgnames) {
-				unowned AURPackage? aur_pkg = database.get_aur_pkg (pkgname);
-				unowned AlpmPackage? pkg;
+				AURPackage? aur_pkg = database.get_aur_pkg (pkgname);
+				AlpmPackage? pkg;
 				if (aur_pkg == null) {
 					pkg = database.get_pkg (pkgname);
 					if (pkg == null) {
@@ -1881,7 +1881,7 @@ namespace Pamac {
 			stdout.printf ("\n");
 		}
 
-		void print_pkgs (GenericArray<unowned AlpmPackage> pkgs, bool print_installed, bool quiet) {
+		void print_pkgs (GenericArray<AlpmPackage> pkgs, bool print_installed, bool quiet) {
 			if (quiet) {
 				foreach (unowned AlpmPackage pkg in pkgs) {
 					stdout.printf ("%s\n", pkg.name);
@@ -2462,7 +2462,7 @@ namespace Pamac {
 							found = true;
 						} else {
 							// try glob
-							GenericArray<unowned AlpmPackage> pkgs = database.get_sync_pkgs_by_glob (target);
+							GenericArray<AlpmPackage> pkgs = database.get_sync_pkgs_by_glob (target);
 							if (pkgs.length != 0) {
 								found = true;
 								foreach (unowned AlpmPackage pkg in pkgs) {
@@ -2628,7 +2628,7 @@ namespace Pamac {
 						}
 					} else {
 						// try glob
-						GenericArray<unowned AlpmPackage> pkgs = database.get_installed_pkgs_by_glob (name);
+						GenericArray<AlpmPackage> pkgs = database.get_installed_pkgs_by_glob (name);
 						if (pkgs.length != 0) {
 							found = true;
 							foreach (unowned AlpmPackage pkg in pkgs) {
@@ -2687,7 +2687,7 @@ namespace Pamac {
 						}
 					} else {
 						// try glob
-						GenericArray<unowned AlpmPackage> pkgs = database.get_installed_pkgs_by_glob (name);
+						GenericArray<AlpmPackage> pkgs = database.get_installed_pkgs_by_glob (name);
 						if (pkgs.length != 0) {
 							found = true;
 							foreach (unowned AlpmPackage pkg in pkgs) {
@@ -2739,7 +2739,7 @@ namespace Pamac {
 		void clone_build_files_real (GenericArray<string> pkgnames, bool overwrite, bool recurse, bool quiet) {
 			var dep_to_check = new GenericArray<string> ();
 			var aur_pkgs = database.get_aur_pkgs (pkgnames);
-			var iter = HashTableIter<string, unowned AURPackage?> (aur_pkgs);
+			var iter = HashTableIter<string, AURPackage?> (aur_pkgs);
 			unowned string pkgname;
 			unowned AURPackage? aur_pkg;
 			while (iter.next (out pkgname, out aur_pkg)) {
@@ -2836,7 +2836,7 @@ namespace Pamac {
 				not_found.replace (target, target);
 			}
 			var aur_pkgs = database.get_aur_pkgs (real_targets);
-			var aur_pkgs_iter = HashTableIter<string, unowned AURPackage?> (aur_pkgs);
+			var aur_pkgs_iter = HashTableIter<string, AURPackage?> (aur_pkgs);
 			unowned string pkgname;
 			unowned AURPackage? aur_pkg;
 			while (aur_pkgs_iter.next (out pkgname, out aur_pkg)) {
