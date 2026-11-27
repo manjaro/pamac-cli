@@ -51,32 +51,31 @@ namespace Pamac {
 			loop.run ();
 		}
 
-		protected override async int run_cmd_line_async (GenericArray<string> args, string? working_directory, Cancellable cancellable) {
-			int status = 1;
+		// throws IOError.CANCELLED when cancellable is cancelled, after killing the command
+		protected override async int run_cmd_line_async (GenericArray<string> args, string? working_directory, Cancellable cancellable) throws Error {
 			var launcher = new SubprocessLauncher (SubprocessFlags.STDIN_INHERIT);
 			if (working_directory != null) {
 				launcher.set_cwd (working_directory);
 			}
 			launcher.set_environ (Environ.get ());
+			// spawnv needs a null terminated array
+			GenericArray<string> args_copy = args.copy (strdup);
+			args_copy.length = args_copy.length + 1;
+			Subprocess process;
 			try {
-				// spawnv needs a null terminated array
-				GenericArray<string> args_copy = args.copy (strdup);
-				args_copy.length = args_copy.length + 1;
-				Subprocess process = launcher.spawnv (args_copy.data);
-				try {
-					yield process.wait_async (cancellable);
-					if (process.get_if_exited ()) {
-						status = process.get_exit_status ();
-					}
-				} catch (Error e) {
-					// cancelled
-					process.send_signal (Posix.Signal.INT);
-					process.send_signal (Posix.Signal.KILL);
-				}
+				process = launcher.spawnv (args_copy.data);
 			} catch (Error e) {
 				print_error (e.message, new GenericArray<string> ());
+				return 1;
 			}
-			return status;
+			try {
+				yield process.wait_async (cancellable);
+			} catch (IOError.CANCELLED e) {
+				process.send_signal (Posix.Signal.INT);
+				process.send_signal (Posix.Signal.KILL);
+				throw e;
+			}
+			return process.get_if_exited () ? process.get_exit_status () : 1;
 		}
 
 		int get_term_width () {
