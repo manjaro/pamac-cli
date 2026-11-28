@@ -24,6 +24,7 @@ namespace Pamac {
 		Database database;
 		bool trans_cancellable;
 		bool cloning;
+		bool searching;
 		Cancellable cancellable;
 		GenericSet<string?> already_checked_aur_dep;
 		public Subprocess pkttyagent;
@@ -33,6 +34,7 @@ namespace Pamac {
 			exit_status = 0;
 			trans_cancellable = false;
 			cloning = false;
+			searching = false;
 			cancellable = new Cancellable ();
 			term_width = get_term_width ();
 			// watch CTRl + C
@@ -1017,6 +1019,10 @@ namespace Pamac {
 				cloning = false;
 				cancellable.cancel ();
 				stdout.printf ("\n");
+			} else if (searching) {
+				searching = false;
+				cancellable.cancel ();
+				stdout.printf ("\n");
 			} else if (trans_cancellable) {
 				transaction.cancel ();
 			} else {
@@ -1581,10 +1587,37 @@ namespace Pamac {
 			}
 		}
 
+		// the searches are run in a main loop to be cancelled with Ctrl+C
+		void run_search_loop (MainLoop loop) {
+			searching = true;
+			loop.run ();
+			searching = false;
+			if (cancellable.is_cancelled ()) {
+				// like a shell command interrupted by SIGINT
+				exit_status = 130;
+			}
+		}
+
 		void search_pkgs (bool quiet) {
-			var pkgs = database.search_pkgs (search_string);
-			if (database.config.enable_aur) {
-				var aur_pkgs = database.search_aur_pkgs (search_string);
+			var loop = new MainLoop ();
+			GenericArray<AlpmPackage>? pkgs = null;
+			GenericArray<AURPackage>? aur_pkgs = null;
+			database.search_pkgs_async.begin (search_string, cancellable, (obj, res) => {
+				pkgs = database.search_pkgs_async.end (res);
+				if (pkgs == null || !database.config.enable_aur) {
+					loop.quit ();
+					return;
+				}
+				database.search_aur_pkgs_async.begin (search_string, cancellable, (obj, res) => {
+					aur_pkgs = database.search_aur_pkgs_async.end (res);
+					loop.quit ();
+				});
+			});
+			run_search_loop (loop);
+			if (cancellable.is_cancelled ()) {
+				return;
+			}
+			if (aur_pkgs != null) {
 				foreach (unowned AURPackage aur_pkg in aur_pkgs) {
 					if (aur_pkg.installed_version == null) {
 						pkgs.add (aur_pkg);
@@ -1596,13 +1629,31 @@ namespace Pamac {
 		}
 
 		void search_installed_pkgs (bool quiet) {
-			var pkgs = database.search_installed_pkgs (search_string);
+			var loop = new MainLoop ();
+			GenericArray<AlpmPackage>? pkgs = null;
+			database.search_installed_pkgs_async.begin (search_string, cancellable, (obj, res) => {
+				pkgs = database.search_installed_pkgs_async.end (res);
+				loop.quit ();
+			});
+			run_search_loop (loop);
+			if (cancellable.is_cancelled ()) {
+				return;
+			}
 			pkgs.sort (sort_search_pkgs_by_relevance);
 			print_search_pkgs (pkgs, false, quiet);
 		}
 
 		void search_repos_pkgs (bool quiet) {
-			var pkgs = database.search_repos_pkgs (search_string);
+			var loop = new MainLoop ();
+			GenericArray<AlpmPackage>? pkgs = null;
+			database.search_repos_pkgs_async.begin (search_string, cancellable, (obj, res) => {
+				pkgs = database.search_repos_pkgs_async.end (res);
+				loop.quit ();
+			});
+			run_search_loop (loop);
+			if (cancellable.is_cancelled ()) {
+				return;
+			}
 			pkgs.sort (sort_search_pkgs_by_relevance);
 			print_search_pkgs (pkgs, true, quiet);
 		}
@@ -2899,7 +2950,16 @@ namespace Pamac {
 				while (not_found_iter.next (out target, null)) {
 					// may be a virtual package
 					// use search and add results
-					var search_aur_pkgs = database.search_aur_pkgs (target);
+					var loop = new MainLoop ();
+					GenericArray<AURPackage>? search_aur_pkgs = null;
+					database.search_aur_pkgs_async.begin (target, cancellable, (obj, res) => {
+						search_aur_pkgs = database.search_aur_pkgs_async.end (res);
+						loop.quit ();
+					});
+					run_search_loop (loop);
+					if (cancellable.is_cancelled ()) {
+						return false;
+					}
 					bool provider_found = false;
 					foreach (unowned AURPackage found_pkg in search_aur_pkgs) {
 						// check all provides of each result
