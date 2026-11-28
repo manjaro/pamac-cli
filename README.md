@@ -1,4 +1,6 @@
-CLI front end of [libpamac](https://gitlab.manjaro.org/applications/libpamac)
+Command line interface of Pamac, the Manjaro package manager.
+
+It is built on top of [libpamac](https://github.com/manjaro/libpamac), the library that provides the package management features and is developed in its own repository.
 
 #### Installing from source
 

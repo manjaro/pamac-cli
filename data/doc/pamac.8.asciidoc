@@ -295,8 +295,8 @@ See *pamac.conf*(5) for more details on configuring pamac using the
 *pamac.conf*(5)
 
 == BUGS ==
-Please report bugs to our Gitlab page
-https://gitlab.manjaro.org/applications/pamac/-/issues.
+Please report bugs to our GitHub page
+https://github.com/manjaro/pamac-cli/issues.
 
 == AUTHORS ==
 Guillaume Benoit
