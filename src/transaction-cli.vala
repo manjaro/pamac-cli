@@ -39,6 +39,8 @@ namespace Pamac {
 		bool is_tty;
 		bool downloads_reported;
 		public bool no_confirm { get; set; }
+		// an authentication is in progress, Ctrl+C must then stop pamac
+		public bool authorizing { get; private set; }
 
 		public TransactionCli (Database database) {
 			Object (database: database);
@@ -654,18 +656,49 @@ namespace Pamac {
 		}
 
 		protected override async bool ask_commit (TransactionSummary summary) {
+			bool answer;
 			if (summary_shown) {
-				return commit_transaction_answer;
+				answer = commit_transaction_answer;
 			} else {
 				show_summary (summary);
+				if (dry_run) {
+					return false;
+				}
+				answer = no_confirm || ask_user (dgettext (null, "Apply transaction"));
 			}
-			if (dry_run) {
-				return false;
+			if (answer) {
+				// the daemon keeps the authorization until the end of the transaction,
+				// so the password is not asked again after the builds
+				answer = yield authorize ();
 			}
-			if (no_confirm) {
+			return answer;
+		}
+
+		// get the authorization and ask the password again when it is mistyped,
+		// until it succeeds or the attempts are exhausted, like sudo does,
+		// so the work already done, like long builds, is not lost
+		public async bool authorize () {
+			if (Posix.geteuid () == 0) {
 				return true;
 			}
-			return ask_user (dgettext (null, "Apply transaction"));
+			// without a terminal, nobody can type the password again
+			int attempts = Posix.isatty (Posix.STDIN_FILENO) ? 3 : 1;
+			// an error with details is not a mistyped password but a failure to retry
+			bool failed_with_details = false;
+			ulong handler = emit_error.connect ((message, details) => {
+				if (details.length > 0) {
+					failed_with_details = true;
+				}
+			});
+			authorizing = true;
+			bool authorized = false;
+			while (!authorized && !failed_with_details && attempts > 0) {
+				authorized = yield get_authorization_async ();
+				attempts--;
+			}
+			authorizing = false;
+			disconnect (handler);
+			return authorized;
 		}
 
 		// the editor chosen by the user, like other tools: VISUAL first, then EDITOR,

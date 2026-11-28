@@ -1023,7 +1023,16 @@ namespace Pamac {
 		}
 
 		bool trans_cancel () {
-			if (cloning) {
+			if (transaction != null && transaction.authorizing) {
+				// pkttyagent was interrupted too, stop now so another
+				// authentication agent, like a graphical one, does not take over
+				stdout.printf ("\n");
+				if (pkttyagent != null) {
+					pkttyagent.force_exit ();
+				}
+				// like a shell command interrupted by SIGINT
+				Process.exit (130);
+			} else if (cloning) {
 				cloning = false;
 				cancellable.cancel ();
 				stdout.printf ("\n");
@@ -2621,7 +2630,34 @@ namespace Pamac {
 			foreach (unowned string name in to_build) {
 				transaction.add_pkg_to_build (name, true, true);
 			}
-			run_transaction ();
+			run_transaction (install_needs_early_authorization (to_install, to_load));
+		}
+
+		// libpamac asks the authorization before the summary in these cases, as run_alpm_transaction:
+		// a missing or outdated package from the repos is installed with a refresh and a sysupgrade,
+		// and a remote package is downloaded. Ask it first, so the password can be typed again.
+		bool install_needs_early_authorization (GenericArray<string> to_install, GenericArray<string> to_load) {
+			if (transaction.dry_run) {
+				return false;
+			}
+			foreach (unowned string path in to_load) {
+				if ("://" in path) {
+					return true;
+				}
+			}
+			if (database.config.simple_install || transaction.no_refresh) {
+				return false;
+			}
+			foreach (unowned string name in to_install) {
+				AlpmPackage? pkg = database.get_installed_pkg (name);
+				if (pkg == null) {
+					return true;
+				}
+				if (database.is_sync_pkg (name) && pkg.installed_version != pkg.version) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		void ask_group_confirmation (string grpname, ref GenericArray<string> to_install) {
@@ -3017,35 +3053,35 @@ namespace Pamac {
 			run_transaction ();
 		}
 
-		void run_transaction () {
+		void run_transaction (bool authorize_first = false) {
 			var loop = new MainLoop ();
-			if (Posix.geteuid () != 0) {
-				// let's time to pkttyagent to get registred
-				Timeout.add (200, () => {
-					transaction.run_async.begin ((obj, res) => {
-						bool success = transaction.run_async.end (res);
-						if (!success) {
-							exit_status = 1;
-						}
-						loop.quit ();
-					});
-					return false;
-				});
-			} else {
-				transaction.run_async.begin ((obj, res) => {
-					bool success = transaction.run_async.end (res);
-					if (!success) {
-						exit_status = 1;
-					}
+			// let's time to pkttyagent to get registred
+			uint delay = Posix.geteuid () != 0 ? 200 : 0;
+			Timeout.add (delay, () => {
+				run_transaction_async.begin (authorize_first, () => {
 					loop.quit ();
 				});
-			}
+				return false;
+			});
 			loop.run ();
+		}
+
+		async void run_transaction_async (bool authorize_first) {
+			// with the authorization, the password can be asked again when it is mistyped
+			if (authorize_first && !(yield transaction.authorize ())) {
+				exit_status = 1;
+				return;
+			}
+			bool success = yield transaction.run_async ();
+			if (!success) {
+				exit_status = 1;
+			}
 		}
 
 		void run_sysupgrade (bool force_refresh) {
 			transaction.add_pkgs_to_upgrade (force_refresh);
-			run_transaction ();
+			// the databases are refreshed first, it needs the authorization
+			run_transaction (!transaction.dry_run && !transaction.no_refresh);
 		}
 
 		public static int main (string[] args) {
