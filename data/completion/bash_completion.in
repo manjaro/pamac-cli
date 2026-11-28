@@ -78,6 +78,7 @@ _pamac()
                   -a --aur
                   --no-aur
                   -q --quiet
+                  --details
                   --devel
                   --no-devel
                   ' -- "$cur" ) )
@@ -137,6 +138,7 @@ _pamac()
                   -e --explicitly-installed
                   -f --files
                   -m --foreign
+                  --third-party
                   -g --groups
                   -i --installed
                   -o --orphans

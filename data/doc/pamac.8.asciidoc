@@ -79,6 +79,8 @@ List packages, groups, repositories or files
 *--orphans, -o* ::: list packages that were installed as dependencies but are no
 longer required by any installed package
 *--foreign, -m* ::: list packages that were not found in the repositories
+*--third-party* ::: list installed packages from repositories which are not
+official, see OfficialRepos in `pamac.conf`
 *--groups, -g* [group(s)] ::: list all packages that are members of the given
 groups, if no group is given list all groups
 *--repos, -r* [repo(s)] ::: list all packages available in the given repos, if
@@ -157,6 +159,8 @@ given the one specified in `pamac.conf` is used
 *--aur, -a* ::: also check updates in AUR
 *--no-aur* ::: do not check updates in AUR
 *--quiet, -q* ::: only print one line per update
+*--details* ::: print one tab separated line per update: source, name, installed
+version, version and download size
 *--devel* ::: also check development packages updates (use with *--aur*)
 *--no-devel* ::: do not check development packages updates
 

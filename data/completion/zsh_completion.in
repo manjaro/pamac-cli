@@ -57,6 +57,7 @@ _pamac_opts_checkupdates=(
   {-a,--aur}'[also check updates in AUR]'
   "--no-aur[do not check updates in AUR]"
   {-q,--quiet}'[only print one line per update]'
+  "--details[print one tab separated line per update: source, name, installed version, version and download size]"
   "--devel[also check development packages updates (use with --aur)]"
   "--no-devel[do not check development packages updates]"
 )
@@ -138,6 +139,7 @@ _pamac_opts_list=(
   {-e,--explicitly-installed}'[list explicitly installed packages]'
   {-o,--orphans}'[list packages that were installed as dependencies but are no longer required by any installed package]'
   {-m,--foreign}'[list packages that were not found in the repositories]'
+  "--third-party[list installed packages from repositories which are not official, see OfficialRepos in pamac.conf]"
   {-g,--groups}'[list all packages that are members of the given groups, if no group is given list all groups]'
   {-r,--repos}'[list all packages available in the given repos, if no repo is given list all repos]'
   {-f,--files}'[list files owned by the given packages]'
