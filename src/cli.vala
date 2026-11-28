@@ -716,9 +716,10 @@ namespace Pamac {
 				bool no_devel = false;
 				bool refresh_tmp_files_dbs = false;
 				bool download_updates = false;
+				bool details = false;
 				string? builddir = null;
 				try {
-					var options = new OptionEntry[10];
+					var options = new OptionEntry[11];
 					options[0] = { "help", 'h', 0, OptionArg.NONE, ref help, null, null };
 					options[1] = { "quiet", 'q', 0, OptionArg.NONE, ref quiet, null, null };
 					options[2] = { "aur", 'a', 0, OptionArg.NONE, ref aur, null, null };
@@ -728,6 +729,7 @@ namespace Pamac {
 					options[6] = { "builddir", 0, 0, OptionArg.STRING, ref builddir, null, null };
 					options[7] = { "refresh-tmp-files-dbs", 0, 0, OptionArg.NONE, ref refresh_tmp_files_dbs, null, null };
 					options[8] = { "download-updates", 0, 0, OptionArg.NONE, ref download_updates, null, null };
+					options[9] = { "details", 0, 0, OptionArg.NONE, ref details, null, null };
 					var opt_context = new OptionContext (null);
 					opt_context.set_help_enabled (false);
 					opt_context.add_main_entries (options, null);
@@ -783,7 +785,7 @@ namespace Pamac {
 					}
 				}
 				// the transaction is initialized in checkupdates
-				checkupdates (quiet, refresh_tmp_files_dbs, download_updates);
+				checkupdates (quiet || details, details, refresh_tmp_files_dbs, download_updates);
 			} else if (args[1] == "update" || args[1] == "upgrade") {
 				bool aur = false;
 				bool no_aur = false;
@@ -1476,6 +1478,7 @@ namespace Pamac {
 								"  --aur, -a",
 								"  --no-aur",
 								"  --quiet, -q",
+								"  --details",
 								"  --devel",
 								"  --no-devel"};
 			foreach (unowned string option in options) {
@@ -1488,6 +1491,7 @@ namespace Pamac {
 								dgettext (null, "also check updates in AUR"),
 								dgettext (null, "do not check updates in AUR"),
 								dgettext (null, "only print one line per update"),
+								dgettext (null, "print one tab separated line per update: source, name, installed version, version and download size"),
 								dgettext (null, "also check development packages updates (use with --aur)"),
 								dgettext (null, "do not check development packages updates")};
 			int i = 0;
@@ -2056,7 +2060,13 @@ namespace Pamac {
 			}
 		}
 
-		void checkupdates (bool quiet, bool refresh_tmp_files_dbs, bool download_updates) {
+		// with details, print one line per update: source, name, installed version (empty for a replacer
+		// or a flatpak), version and download size separated by tabs, like pamac-checkupdates --details
+		void print_update_details (string source, string name, string? installed_version, string version, uint64 download_size) {
+			stdout.printf ("%s\t%s\t%s\t%s\t%s\n", source, name, installed_version ?? "", version, download_size.to_string ());
+		}
+
+		void checkupdates (bool quiet, bool details, bool refresh_tmp_files_dbs, bool download_updates) {
 			// get_updates only reads the local databases: synchronize them first,
 			// only the modified ones are downloaded
 			var loop = new MainLoop ();
@@ -2171,6 +2181,18 @@ namespace Pamac {
 						loop.quit ();
 					});
 					loop.run ();
+				}
+				if (details) {
+					foreach (unowned AlpmPackage pkg in updates.repos_updates) {
+						print_update_details ("repo", pkg.name, pkg.installed_version, pkg.version, pkg.download_size);
+					}
+					foreach (unowned AURPackage pkg in updates.aur_updates) {
+						print_update_details ("aur", pkg.name, pkg.installed_version, pkg.version, 0);
+					}
+					foreach (unowned FlatpakPackage pkg in updates.flatpak_updates) {
+						print_update_details ("flatpak", pkg.app_name ?? pkg.name, null, pkg.version, pkg.download_size);
+					}
+					return;
 				}
 				if (quiet) {
 					foreach (unowned AlpmPackage pkg in updates.repos_updates) {
@@ -2306,6 +2328,32 @@ namespace Pamac {
 									installed_version_length, "",
 									version_length, pkg.version,
 									pkg.repo);
+				}
+				// the AUR packages are not counted, they are built
+				uint64 download_size = 0;
+				bool reboot_required = false;
+				foreach (unowned AlpmPackage pkg in updates.repos_updates) {
+					download_size += pkg.download_size;
+					if (package_needs_reboot (pkg.name)) {
+						reboot_required = true;
+					}
+				}
+				foreach (unowned AURPackage pkg in updates.aur_updates) {
+					if (package_needs_reboot (pkg.name)) {
+						reboot_required = true;
+					}
+				}
+				foreach (unowned FlatpakPackage pkg in updates.flatpak_updates) {
+					download_size += pkg.download_size;
+				}
+				if (download_size > 0 || reboot_required) {
+					stdout.printf ("\n");
+					if (download_size > 0) {
+						stdout.printf ("%s: %s\n", dgettext (null, "Total download size"), format_size (download_size));
+					}
+					if (reboot_required) {
+						stdout.printf ("%s.\n", dgettext (null, "A restart will be required"));
+					}
 				}
 				uint ignored_updates_nb = updates.ignored_repos_updates.length + updates.ignored_aur_updates.length;
 				if (ignored_updates_nb > 0) {
