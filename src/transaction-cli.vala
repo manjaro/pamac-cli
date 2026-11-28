@@ -431,259 +431,91 @@ namespace Pamac {
 			return answer;
 		}
 
+		// the reason why a package is in the summary, displayed in place of the installed version
+		string get_summary_reason (TransactionSummary summary, Package pkg) {
+			SummaryItem? item = summary.get_item (pkg);
+			if (item == null || item.related == null) {
+				return "";
+			}
+			unowned string related = item.related;
+			switch (item.reason) {
+				case SummaryReason.DEPENDENCY:
+					return "(%s: %s)".printf (dgettext (null, "Required By"), related);
+				case SummaryReason.REPLACE:
+					return "(%s: %s)".printf (dgettext (null, "Replaces"), related);
+				case SummaryReason.CONFLICT:
+					return "(%s: %s)".printf (dgettext (null, "Conflicts With"), related);
+				case SummaryReason.DEPENDS_ON_REMOVED:
+					return "(%s: %s)".printf (dgettext (null, "Depends On"), related);
+				case SummaryReason.ORPHAN:
+					return "(%s: %s)".printf (dgettext (null, "Orphan Of"), related);
+				default:
+					return "";
+			}
+		}
+
+		void print_summary_line (string name, int name_length, string version, int version_length,
+								string details, int details_length, string repo, int repo_length, string size) {
+			// translations strings need to be manually aligned
+			var str_builder = new StringBuilder ("  %-*s  %-*s  ".printf (name_length, name, version_length, version));
+			str_builder.append (details);
+			int space_count = details.char_count ();
+			while (space_count < details_length) {
+				str_builder.append (" ");
+				space_count++;
+			}
+			str_builder.append ("  %-*s  %s".printf (repo_length, repo, size));
+			stdout.printf ("%s\n", str_builder.str.chomp ());
+		}
+
 		void show_summary (TransactionSummary summary) {
-			uint64 dsize = 0;
 			uint64 rsize = 0;
-			int64 isize = 0;
+			// installed_size_delta only counts the alpm packages, removals included
+			int64 isize = summary.installed_size_delta;
 			int name_length = 0;
 			int version_length = 0;
-			int installed_version_length = 0;
+			int details_length = 0;
 			int repo_length = 0;
-			int pkg_name_length;
-			int pkg_version_length;
-			int pkg_installed_version_length;
-			int pkg_repo_length;
-			// first pass to compute pkgs size and strings length
-			if (summary.to_remove.length != 0) {
-				foreach (unowned Package pkg in summary.to_remove) {
-					rsize += pkg.installed_size;
-					pkg_name_length = pkg.name.length;
-					if (pkg_name_length > name_length) {
-						name_length = pkg_name_length;
-					}
-					pkg_version_length = pkg.version.length;
-					if (pkg_version_length > version_length) {
-						version_length = pkg_version_length;
-					}
-					// check for remove reason to display in place of installed_version
-					var alpm_pkg = pkg as AlpmPackage;
-					if (alpm_pkg != null) {
-						unowned GenericArray<string> dep_list = alpm_pkg.depends;
-						if (dep_list.length != 0) {
-							// depends list populated in alpm_utils/get_transaction_summary, it contains only one element.
-							string dep = "(%s: %s)".printf (dgettext (null, "Depends On"), dep_list[0]);
-							int dep_length = dep.char_count ();
-							if (dep_length > installed_version_length) {
-								installed_version_length = dep_length;
-							}
-						} else {
-							unowned GenericArray<string> requiredby_list = alpm_pkg.requiredby;
-							if (requiredby_list.length != 0) {
-								// requiredby list populated in alpm_utils/get_transaction_summary, it contains only one element.
-								string requiredby = "(%s: %s)".printf (dgettext (null, "Orphan Of"), requiredby_list[0]);
-								int requiredby_length = requiredby.char_count ();
-								if (requiredby_length > installed_version_length) {
-									installed_version_length = requiredby_length;
-								}
-							}
-						}
-					}
+			GenericArray<Package>[] lists = {summary.to_upgrade, summary.to_reinstall, summary.to_install,
+											summary.to_build, summary.to_downgrade, summary.to_remove,
+											summary.conflicts_to_remove};
+			// first pass to compute strings length
+			foreach (unowned GenericArray<Package> list in lists) {
+				foreach (unowned Package pkg in list) {
+					name_length = int.max (name_length, pkg.name.length);
+					version_length = int.max (version_length, pkg.version.length);
 					unowned string? repo = pkg.repo;
 					if (repo != null) {
-						pkg_repo_length = repo.length;
-						if (pkg_repo_length > repo_length) {
-							repo_length = pkg_repo_length;
-						}
+						repo_length = int.max (repo_length, repo.length);
 					}
+					details_length = int.max (details_length, get_summary_reason (summary, pkg).char_count ());
 				}
 			}
-			if (summary.conflicts_to_remove.length != 0) {
-				foreach (unowned Package pkg in summary.conflicts_to_remove) {
-					rsize += pkg.installed_size;
-					pkg_name_length = pkg.name.length;
-					if (pkg_name_length > name_length) {
-						name_length = pkg_name_length;
-					}
-					pkg_version_length = pkg.version.length;
-					if (pkg_version_length > version_length) {
-						version_length = pkg_version_length;
-					}
-					// check for conflict to display in place of installed_version
-					var alpm_pkg = pkg as AlpmPackage;
-					if (alpm_pkg != null) {
-						unowned GenericArray<string> dep_list = alpm_pkg.conflicts;
-						if (dep_list.length != 0) {
-							// conflicts list populated in alpm_utils/get_transaction_summary, it contains only one element.
-							string conflict = "(%s: %s)".printf (dgettext (null, "Conflicts With"), dep_list[0]);
-							int conflict_length = conflict.char_count ();
-							if (conflict_length > installed_version_length) {
-								installed_version_length = conflict_length;
-							}
-						}
-					}
-					unowned string? repo = pkg.repo;
-					if (repo != null) {
-						pkg_repo_length = repo.length;
-						if (pkg_repo_length > repo_length) {
-							repo_length = pkg_repo_length;
-						}
-					}
-				}
-			}
-			if (summary.to_downgrade.length != 0) {
-				foreach (unowned Package pkg in summary.to_downgrade) {
-					dsize += pkg.download_size;
-					var installed_pkg = database.get_installed_pkg (pkg.name);
-					isize += ((int64) pkg.installed_size - (int64) installed_pkg.installed_size);
-					pkg_name_length = pkg.name.length;
-					if (pkg_name_length > name_length) {
-						name_length = pkg_name_length;
-					}
-					pkg_version_length = pkg.version.length;
-					if (pkg_version_length > version_length) {
-						version_length = pkg_version_length;
-					}
-					unowned string? repo = pkg.repo;
-					if (repo != null) {
-						pkg_repo_length = repo.length;
-						if (pkg_repo_length > repo_length) {
-							repo_length = pkg_repo_length;
-						}
-					}
+			// the installed version is displayed for these ones
+			foreach (unowned GenericArray<Package> list in new GenericArray<Package>[] {summary.to_upgrade, summary.to_downgrade, summary.to_build}) {
+				foreach (unowned Package pkg in list) {
 					unowned string? installed_version = pkg.installed_version;
 					if (installed_version != null) {
-						pkg_installed_version_length = pkg.installed_version.length + 2; // because of (%s)
-						if (pkg_installed_version_length > installed_version_length) {
-							installed_version_length = pkg_installed_version_length;
-						}
+						details_length = int.max (details_length, installed_version.char_count () + 2); // because of (%s)
 					}
 				}
 			}
-			if (summary.to_build.length != 0) {
-				foreach (unowned Package pkg in summary.to_build) {
-					pkg_name_length = pkg.name.length;
-					if (pkg_name_length > name_length) {
-						name_length = pkg_name_length;
-					}
-					pkg_version_length = pkg.version.length;
-					if (pkg_version_length > version_length) {
-						version_length = pkg_version_length;
-					}
-					unowned string? installed_version = pkg.installed_version;
-					if (installed_version != null) {
-						pkg_installed_version_length = pkg.installed_version.length + 2; // because of (%s)
-						if (pkg_installed_version_length > installed_version_length) {
-							installed_version_length = pkg_installed_version_length;
-						}
-					}
-					// check also for requiredby to display in place of installed_version
-					var alpm_pkg = pkg as AlpmPackage;
-					if (alpm_pkg != null) {
-						unowned GenericArray<string> dep_list = alpm_pkg.requiredby;
-						if (dep_list.length != 0) {
-							// requiredby list populated in alpm_utils/get_transaction_summary, it contains only one element.
-							string requiredby = "(%s: %s)".printf (dgettext (null, "Required By"), dep_list[0]);
-							int requiredby_length = requiredby.char_count ();
-							if (requiredby_length > installed_version_length) {
-								installed_version_length = requiredby_length;
-							}
-						}
-					}
-					unowned string? repo = pkg.repo;
-					if (repo != null) {
-						pkg_repo_length = repo.length;
-						if (pkg_repo_length > repo_length) {
-							repo_length = pkg_repo_length;
-						}
-					}
-				}
-			}
-			if (summary.to_install.length != 0) {
-				foreach (unowned Package pkg in summary.to_install) {
-					dsize += pkg.download_size;
+			foreach (unowned Package pkg in summary.to_remove) {
+				rsize += pkg.installed_size;
+				if (pkg is AlpmPackage) {
 					isize += (int64) pkg.installed_size;
-					pkg_name_length = pkg.name.length;
-					if (pkg_name_length > name_length) {
-						name_length = pkg_name_length;
-					}
-					pkg_version_length = pkg.version.length;
-					if (pkg_version_length > version_length) {
-						version_length = pkg_version_length;
-					}
-					// check for requiredby/replace to display in place of installed_version
-					var alpm_pkg = pkg as AlpmPackage;
-					if (alpm_pkg != null) {
-						bool requiredby_found = false;
-						// 1 - check for required dep
-						unowned GenericArray<string> dep_list = alpm_pkg.requiredby;
-						if (dep_list.length != 0) {
-							requiredby_found = true;
-							// requiredby list populated in alpm_utils/get_transaction_summary, it contains only one element.
-							string requiredby = "(%s: %s)".printf (dgettext (null, "Required By"), dep_list[0]);
-							int requiredby_length = requiredby.char_count ();
-							if (requiredby_length > installed_version_length) {
-								installed_version_length = requiredby_length;
-							}
-						}
-						// 2 - check for replaces
-						if (!requiredby_found) {
-							dep_list = alpm_pkg.replaces;
-							if (dep_list.length != 0) {
-								// replaces list populated in alpm_utils/get_transaction_summary, it contains only one element.
-								string replace = "(%s: %s)".printf (dgettext (null, "Replaces"), dep_list[0]);
-								int replace_length = replace.char_count ();
-								if (replace_length > installed_version_length) {
-									installed_version_length = replace_length;
-								}
-							}
-						}
-					}
-					unowned string? repo = pkg.repo;
-					if (repo != null) {
-						pkg_repo_length = repo.length;
-						if (pkg_repo_length > repo_length) {
-							repo_length = pkg_repo_length;
-						}
-					}
 				}
 			}
-			if (summary.to_reinstall.length != 0) {
-				foreach (unowned Package pkg in summary.to_reinstall) {
-					dsize += pkg.download_size;
-					pkg_name_length = pkg.name.length;
-					if (pkg_name_length > name_length) {
-						name_length = pkg_name_length;
-					}
-					pkg_version_length = pkg.version.length;
-					if (pkg_version_length > version_length) {
-						version_length = pkg_version_length;
-					}
-					unowned string? repo = pkg.repo;
-					if (repo != null) {
-						pkg_repo_length = repo.length;
-						if (pkg_repo_length > repo_length) {
-							repo_length = pkg_repo_length;
-						}
-					}
+			foreach (unowned Package pkg in summary.conflicts_to_remove) {
+				rsize += pkg.installed_size;
+				if (pkg is AlpmPackage) {
+					isize += (int64) pkg.installed_size;
 				}
 			}
-			if (summary.to_upgrade.length != 0) {
-				foreach (unowned Package pkg in summary.to_upgrade) {
-					dsize += pkg.download_size;
-					var installed_pkg = database.get_installed_pkg (pkg.name);
-					isize += ((int64) pkg.installed_size - (int64) installed_pkg.installed_size);
-					pkg_name_length = pkg.name.length;
-					if (pkg_name_length > name_length) {
-						name_length = pkg_name_length;
-					}
-					pkg_version_length = pkg.version.length;
-					if (pkg_version_length > version_length) {
-						version_length = pkg_version_length;
-					}
-					unowned string? repo = pkg.repo;
-					if (repo != null) {
-						pkg_repo_length = repo.length;
-						if (pkg_repo_length > repo_length) {
-							repo_length = pkg_repo_length;
-						}
-					}
-					unowned string? installed_version = pkg.installed_version;
-					if (installed_version != null) {
-						pkg_installed_version_length = pkg.installed_version.length + 2; // because of (%s)
-						if (pkg_installed_version_length > installed_version_length) {
-							installed_version_length = pkg_installed_version_length;
-						}
-					}
+			foreach (unowned Package pkg in summary.to_install) {
+				if (!(pkg is AlpmPackage)) {
+					// snaps and flatpaks
+					isize += (int64) pkg.installed_size;
 				}
 			}
 			// second pass to print details
@@ -691,173 +523,69 @@ namespace Pamac {
 			if (summary.to_upgrade.length != 0) {
 				stdout.printf (dgettext (null, "To upgrade") + " (%u):\n".printf (summary.to_upgrade.length));
 				foreach (unowned Package pkg in summary.to_upgrade) {
-					string size = pkg.download_size == 0 ? "" : format_size (pkg.download_size);
-					string repo = pkg.repo ?? "";
-					stdout.printf ("  %-*s  %-*s  %-*s  %-*s  %s\n",
-									name_length, pkg.name,
-									version_length, pkg.version,
-									installed_version_length, "(%s)".printf (pkg.installed_version),
-									repo_length, repo,
-									size);
+					print_summary_line (pkg.name, name_length, pkg.version, version_length,
+										"(%s)".printf (pkg.installed_version), details_length,
+										pkg.repo ?? "", repo_length,
+										pkg.download_size == 0 ? "" : format_size (pkg.download_size));
 				}
 			}
 			if (summary.to_reinstall.length != 0) {
 				stdout.printf (dgettext (null, "To reinstall") + " (%u):\n".printf (summary.to_reinstall.length));
 				foreach (unowned Package pkg in summary.to_reinstall) {
-					string size = pkg.download_size == 0 ? "" : format_size (pkg.download_size);
-					string repo = pkg.repo ?? "";
-					stdout.printf ("  %-*s  %-*s  %-*s  %-*s  %s\n",
-									name_length, pkg.name,
-									version_length , pkg.version,
-									installed_version_length, "",
-									repo_length, repo,
-									size);
+					print_summary_line (pkg.name, name_length, pkg.version, version_length,
+										"", details_length,
+										pkg.repo ?? "", repo_length,
+										pkg.download_size == 0 ? "" : format_size (pkg.download_size));
 				}
 			}
 			if (summary.to_install.length != 0) {
 				stdout.printf (dgettext (null, "To install") + " (%u):\n".printf (summary.to_install.length));
 				foreach (unowned Package pkg in summary.to_install) {
-					string size = pkg.download_size == 0 ? "" : format_size (pkg.download_size);
-					string repo = pkg.repo ?? "";
-					// check for requiredby/replace to display in place of installed_version
-					string requiredby = "";
-					var alpm_pkg = pkg as AlpmPackage;
-					if (alpm_pkg != null) {
-						bool requiredby_found = false;
-						// 1 - check for required dep
-						unowned GenericArray<string> dep_list = alpm_pkg.requiredby;
-						if (dep_list.length != 0) {
-							requiredby_found = true;
-							// requiredby list populated in alpm_utils/get_transaction_summary, it contains only one element.
-							requiredby = "(%s: %s)".printf (dgettext (null, "Required By"), dep_list[0]);
-						}
-						// 2 - check for replaces
-						if (!requiredby_found) {
-							dep_list = alpm_pkg.replaces;
-							if (dep_list.length != 0) {
-								// replaces list populated in alpm_utils/get_transaction_summary, it contains only one element.
-								requiredby = "(%s: %s)".printf (dgettext (null, "Replaces"), dep_list[0]);
-							}
-						}
-					}
-					// translations strings need to be manually aligned
-					var str_builder = new StringBuilder ("  %-*s  %-*s".printf (name_length, pkg.name, version_length, pkg.version));
-					str_builder.append ("  ");
-					str_builder.append (requiredby);
-					int space_count = requiredby.char_count ();
-					while (space_count < installed_version_length) {
-						str_builder.append (" ");
-						space_count++;
-					}
-					str_builder.append ("  %-*s  %s\n".printf (repo_length, repo, size));
-					stdout.printf (str_builder.str);
+					print_summary_line (pkg.name, name_length, pkg.version, version_length,
+										get_summary_reason (summary, pkg), details_length,
+										pkg.repo ?? "", repo_length,
+										pkg.download_size == 0 ? "" : format_size (pkg.download_size));
 				}
 			}
 			if (summary.to_build.length != 0) {
 				stdout.printf (dgettext (null, "To build") + " (%u):\n".printf (summary.to_build.length));
 				foreach (unowned Package pkg in summary.to_build) {
-					string repo = pkg.repo ?? "";
-					string installed_version = "";
+					string details;
 					if (pkg.installed_version != null && pkg.installed_version != pkg.version) {
-						installed_version = "(%s)".printf (pkg.installed_version);
+						details = "(%s)".printf (pkg.installed_version);
+					} else {
+						details = get_summary_reason (summary, pkg);
 					}
-					if (installed_version == "") {
-						// check for requiredby to display in place of installed_version
-						var alpm_pkg = pkg as AlpmPackage;
-						if (alpm_pkg != null) {
-							unowned GenericArray<string> dep_list = alpm_pkg.requiredby;
-							if (dep_list.length != 0) {
-								// requiredby list populated in alpm_utils/get_transaction_summary, it contains only one element.
-								installed_version = "(%s: %s)".printf (dgettext (null, "Required By"), dep_list[0]);
-							}
-						}
-					}
-					// translations strings need to be manually aligned
-					var str_builder = new StringBuilder ("  %-*s  %-*s".printf (name_length, pkg.name, version_length, pkg.version));
-					str_builder.append ("  ");
-					str_builder.append (installed_version);
-					int space_count = installed_version.char_count ();
-					while (space_count < installed_version_length) {
-						str_builder.append (" ");
-						space_count++;
-					}
-					str_builder.append ("  %s\n".printf (repo));
-					stdout.printf (str_builder.str);
+					print_summary_line (pkg.name, name_length, pkg.version, version_length,
+										details, details_length,
+										pkg.repo ?? "", repo_length, "");
 				}
 			}
 			if (summary.to_downgrade.length != 0) {
 				stdout.printf (dgettext (null, "To downgrade") + " (%u):\n".printf (summary.to_downgrade.length));
 				foreach (unowned Package pkg in summary.to_downgrade) {
-					string size = pkg.download_size == 0 ? "" : format_size (pkg.download_size);
-					string repo = pkg.repo ?? "";
-					stdout.printf ("  %-*s  %-*s  %-*s  %-*s  %s\n",
-									name_length, pkg.name,
-									version_length, pkg.version,
-									installed_version_length, "(%s)".printf (pkg.installed_version),
-									repo_length, repo,
-									size);
+					print_summary_line (pkg.name, name_length, pkg.version, version_length,
+										"(%s)".printf (pkg.installed_version), details_length,
+										pkg.repo ?? "", repo_length,
+										pkg.download_size == 0 ? "" : format_size (pkg.download_size));
 				}
 			}
 			if (summary.to_remove.length != 0 || summary.conflicts_to_remove.length != 0) {
 				stdout.printf (dgettext (null, "To remove") + " (%u):\n".printf (summary.to_remove.length + summary.conflicts_to_remove.length));
 				foreach (unowned Package pkg in summary.to_remove) {
-					string repo = pkg.repo ?? "";
-					string dep = "";
-					// check for remove reason to display in place of installed_version
-					var alpm_pkg = pkg as AlpmPackage;
-					if (alpm_pkg != null) {
-						unowned GenericArray<string> dep_list = alpm_pkg.depends;
-						if (dep_list.length != 0) {
-							// depends list populated in alpm_utils/get_transaction_summary, it contains only one element.
-							dep = "(%s: %s)".printf (dgettext (null, "Depends On"), dep_list[0]);
-						} else {
-							unowned GenericArray<string> requiredby_list = alpm_pkg.requiredby;
-							if (requiredby_list.length != 0) {
-								// requiredby list populated in alpm_utils/get_transaction_summary, it contains only one element.
-								dep = "(%s: %s)".printf (dgettext (null, "Orphan Of"), requiredby_list[0]);
-							}
-						}
-					}
-					// translations strings need to be manually aligned
-					var str_builder = new StringBuilder ("  %-*s  %-*s".printf (name_length, pkg.name, version_length, pkg.version));
-					str_builder.append ("  ");
-					str_builder.append (dep);
-					int space_count = dep.char_count ();
-					while (space_count < installed_version_length) {
-						str_builder.append (" ");
-						space_count++;
-					}
-					str_builder.append ("  %s\n".printf (repo));
-					stdout.printf (str_builder.str);
+					print_summary_line (pkg.name, name_length, pkg.version, version_length,
+										get_summary_reason (summary, pkg), details_length,
+										pkg.repo ?? "", repo_length, "");
 				}
 				foreach (unowned Package pkg in summary.conflicts_to_remove) {
-					string repo = pkg.repo ?? "";
-					string conflict = "";
-					// check for conflict to display in place of installed_version
-					var alpm_pkg = pkg as AlpmPackage;
-					if (alpm_pkg != null) {
-						unowned GenericArray<string> dep_list = alpm_pkg.conflicts;
-						if (dep_list.length != 0) {
-							// conflicts list populated in alpm_utils/get_transaction_summary, it contains only one element.
-							conflict = "(%s: %s)".printf (dgettext (null, "Conflicts With"), dep_list[0]);
-						}
-					}
-					// translations strings need to be manually aligned
-					var str_builder = new StringBuilder ("  %-*s  %-*s".printf (name_length, pkg.name, version_length, pkg.version));
-					str_builder.append ("  ");
-					str_builder.append (conflict);
-					int space_count = conflict.char_count ();
-					while (space_count < installed_version_length) {
-						str_builder.append (" ");
-						space_count++;
-					}
-					str_builder.append ("  %s\n".printf (repo));
-					stdout.printf (str_builder.str);
+					print_summary_line (pkg.name, name_length, pkg.version, version_length,
+										get_summary_reason (summary, pkg), details_length,
+										pkg.repo ?? "", repo_length, "");
 				}
 			}
 			stdout.printf ("\n");
-			if (dsize > 0) {
-				stdout.printf ("%s: %s\n", dgettext (null, "Total download size"), format_size (dsize));
+			if (summary.download_size > 0) {
+				stdout.printf ("%s: %s\n", dgettext (null, "Total download size"), format_size (summary.download_size));
 			}
 			if (isize > 0) {
 				stdout.printf ("%s: %s\n", dgettext (null, "Total installed size"), format_size (isize));
