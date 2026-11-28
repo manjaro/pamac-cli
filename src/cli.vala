@@ -226,12 +226,13 @@ namespace Pamac {
 					bool explicitly_installed = false;
 					bool orphans = false;
 					bool foreign = false;
+					bool third_party = false;
 					bool groups = false;
 					bool repos = false;
 					bool files = false;
 					bool quiet = false;
 					try {
-						var options = new OptionEntry[9];
+						var options = new OptionEntry[10];
 						options[0] = { "help", 'h', 0, OptionArg.NONE, ref help, null, null };
 						options[1] = { "installed", 'i', 0, OptionArg.NONE, ref installed, null, null };
 						options[2] = { "explicitly-installed", 'e', 0, OptionArg.NONE, ref explicitly_installed, null, null };
@@ -241,6 +242,7 @@ namespace Pamac {
 						options[6] = { "repos", 'r', 0, OptionArg.NONE, ref repos, null, null };
 						options[7] = { "files", 'f', 0, OptionArg.NONE, ref files, null, null };
 						options[8] = { "quiet", 'q', 0, OptionArg.NONE, ref quiet, null, null };
+						options[9] = { "third-party", 0, 0, OptionArg.NONE, ref third_party, null, null };
 						var opt_context = new OptionContext (null);
 						opt_context.set_help_enabled (false);
 						opt_context.add_main_entries (options, null);
@@ -279,6 +281,12 @@ namespace Pamac {
 							display_list_help ();
 						} else {
 							list_foreign (quiet);
+						}
+					} else if (third_party) {
+						if (orphans || foreign || groups || repos || files) {
+							display_list_help ();
+						} else {
+							list_third_party (quiet);
 						}
 					} else if (groups) {
 						if (installed || orphans || foreign || repos || files) {
@@ -1278,6 +1286,7 @@ namespace Pamac {
 								"  --explicitly-installed, -e",
 								"  --orphans, -o",
 								"  --foreign, -m",
+								"  --third-party",
 								"  --groups, -g [%s]".printf (dgettext (null, "group(s)")),
 								"  --repos, -r [%s]".printf (dgettext (null, "repo(s)")),
 								"  --files, -f <%s>".printf (dgettext (null, "package(s)")),
@@ -1292,6 +1301,7 @@ namespace Pamac {
 								dgettext (null, "list explicitly installed packages"),
 								dgettext (null, "list packages that were installed as dependencies but are no longer required by any installed package"),
 								dgettext (null, "list packages that were not found in the repositories"),
+								dgettext (null, "list installed packages from repositories which are not official, see OfficialRepos in pamac.conf"),
 								dgettext (null, "list all packages that are members of the given groups, if no group is given list all groups"),
 								dgettext (null, "list all packages available in the given repos, if no repo is given list all repos"),
 								dgettext (null, "list files owned by the given packages"),
@@ -1680,7 +1690,7 @@ namespace Pamac {
 				unowned AlpmPackage pkg = pkgs[i];
 				unowned string pkg_name = pkg.name;
 				unowned string pkg_version = pkg.version;
-				string repo = pkg.repo ?? "";
+				string repo = get_repo_label (database, pkg);
 				int available_width = term_width - (pkg_name.length + pkg_version.length + 4);
 				var str_builder = new StringBuilder (pkg_name);
 				str_builder.append ("  ");
@@ -1809,7 +1819,7 @@ namespace Pamac {
 				print_property (properties[4], dgettext (null, "Unknown"), max_length);
 			}
 			// Repository
-			print_property (properties[5], pkg.repo, max_length);
+			print_property (properties[5], get_repo_label (database, pkg), max_length);
 			if (pkg.installed_size != 0){
 				// Size
 				print_property (properties[6], format_size (pkg.installed_size), max_length);
@@ -1955,13 +1965,7 @@ namespace Pamac {
 				if (pkg_version_length > version_length) {
 					version_length = pkg_version_length;
 				}
-				unowned string? repo = pkg.repo;
-				if (repo != null) {
-					int pkg_repo_length = repo.length;
-					if (pkg_repo_length > repo_length) {
-						repo_length = pkg_repo_length;
-					}
-				}
+				repo_length = int.max (repo_length, get_repo_label (database, pkg).length);
 			}
 			int installed_width = 0;
 			string installed = null;
@@ -1988,7 +1992,7 @@ namespace Pamac {
 					str_builder.append (installed);
 					str_builder.append (" ");
 				}
-				string repo = pkg.repo ?? "";
+				string repo = get_repo_label (database, pkg);
 				string installed_size;
 				if (pkg.installed_size == 0) {
 					installed_size = "";
@@ -2023,6 +2027,17 @@ namespace Pamac {
 			print_pkgs (pkgs, false, quiet);
 		}
 
+		void list_third_party (bool quiet) {
+			var pkgs = new GenericArray<AlpmPackage> ();
+			foreach (unowned AlpmPackage pkg in database.get_installed_pkgs ()) {
+				unowned string? repo = pkg.repo;
+				if (repo != null && pkg.source == PackageSource.REPO && !database.is_official_repo (repo)) {
+					pkgs.add (pkg);
+				}
+			}
+			print_pkgs (pkgs, false, quiet);
+		}
+
 		void list_groups (string[] names, bool quiet) {
 			if (names.length == 0) {
 				var group_names = database.get_groups_names ();
@@ -2048,7 +2063,11 @@ namespace Pamac {
 			if (names.length == 0) {
 				var repos_names = database.get_repos_names ();
 				foreach (unowned string name in repos_names) {
-					stdout.printf ("%s\n", name);
+					if (quiet || database.is_official_repo (name)) {
+						stdout.printf ("%s\n", name);
+					} else {
+						stdout.printf ("%s (%s)\n", name, dgettext (null, "Third Party"));
+					}
 				}
 				return;
 			}
@@ -2198,7 +2217,7 @@ namespace Pamac {
 											name_length, pkg.name,
 											installed_version_length, pkg.installed_version,
 											version_length, pkg.version,
-											pkg.repo);
+											get_repo_label (database, pkg));
 						}
 						foreach (unowned AURPackage pkg in updates.ignored_aur_updates) {
 							stdout.printf ("%-*s  %-*s -> %-*s  %s\n",
@@ -2360,7 +2379,7 @@ namespace Pamac {
 									name_length, pkg.name,
 									installed_version_length, pkg.installed_version,
 									version_length, pkg.version,
-									pkg.repo);
+									get_repo_label (database, pkg));
 				}
 				foreach (unowned AURPackage pkg in updates.aur_updates) {
 					stdout.printf ("%-*s  %-*s -> %-*s  %s\n",
@@ -2378,7 +2397,7 @@ namespace Pamac {
 									name_length, app_name,
 									installed_version_length, "",
 									version_length, pkg.version,
-									pkg.repo);
+									get_repo_label (database, pkg));
 				}
 				// the AUR packages are not counted, they are built
 				uint64 download_size = 0;
@@ -2416,7 +2435,7 @@ namespace Pamac {
 										name_length, pkg.name,
 										installed_version_length, pkg.installed_version,
 										version_length, pkg.version,
-										pkg.repo);
+										get_repo_label (database, pkg));
 					}
 					foreach (unowned AURPackage pkg in updates.ignored_aur_updates) {
 						stdout.printf ("%-*s  %-*s -> %-*s  %s\n",
@@ -2636,7 +2655,7 @@ namespace Pamac {
 								num_length, "%i:".printf (num),
 								name_length, pkg.name,
 								version_length, pkg.version,
-								pkg.repo);
+								get_repo_label (database, pkg));
 				num++;
 			}
 			// get user input

@@ -18,6 +18,18 @@
  */
 
 namespace Pamac {
+	// the repository of a package, marked when it is not one of the distribution, see OfficialRepos in pamac.conf
+	string get_repo_label (Database database, Package pkg) {
+		unowned string? repo = pkg.repo;
+		if (repo == null) {
+			return "";
+		}
+		if (pkg.source == PackageSource.REPO && !database.is_official_repo (repo)) {
+			return "%s (%s)".printf (repo, dgettext (null, "Third Party"));
+		}
+		return repo;
+	}
+
 	public class TransactionCli: Transaction {
 		string current_line;
 		string current_action;
@@ -350,7 +362,7 @@ namespace Pamac {
 									num_length, "%u:".printf (i + 1),
 									name_length, pkg.name,
 									version_length, pkg.version,
-									pkg.repo ?? "");
+									get_repo_label (database, pkg));
 				}
 			}
 			// get user input
@@ -527,10 +539,7 @@ namespace Pamac {
 				foreach (unowned Package pkg in list) {
 					name_length = int.max (name_length, pkg.name.length);
 					version_length = int.max (version_length, pkg.version.length);
-					unowned string? repo = pkg.repo;
-					if (repo != null) {
-						repo_length = int.max (repo_length, repo.length);
-					}
+					repo_length = int.max (repo_length, get_repo_label (database, pkg).length);
 					details_length = int.max (details_length, get_summary_reason (summary, pkg).char_count ());
 				}
 			}
@@ -568,7 +577,7 @@ namespace Pamac {
 				foreach (unowned Package pkg in summary.to_upgrade) {
 					print_summary_line (pkg.name, name_length, pkg.version, version_length,
 										"(%s)".printf (pkg.installed_version), details_length,
-										pkg.repo ?? "", repo_length,
+										get_repo_label (database, pkg), repo_length,
 										pkg.download_size == 0 ? "" : format_size (pkg.download_size));
 				}
 			}
@@ -577,7 +586,7 @@ namespace Pamac {
 				foreach (unowned Package pkg in summary.to_reinstall) {
 					print_summary_line (pkg.name, name_length, pkg.version, version_length,
 										"", details_length,
-										pkg.repo ?? "", repo_length,
+										get_repo_label (database, pkg), repo_length,
 										pkg.download_size == 0 ? "" : format_size (pkg.download_size));
 				}
 			}
@@ -586,7 +595,7 @@ namespace Pamac {
 				foreach (unowned Package pkg in summary.to_install) {
 					print_summary_line (pkg.name, name_length, pkg.version, version_length,
 										get_summary_reason (summary, pkg), details_length,
-										pkg.repo ?? "", repo_length,
+										get_repo_label (database, pkg), repo_length,
 										pkg.download_size == 0 ? "" : format_size (pkg.download_size));
 				}
 			}
@@ -601,7 +610,7 @@ namespace Pamac {
 					}
 					print_summary_line (pkg.name, name_length, pkg.version, version_length,
 										details, details_length,
-										pkg.repo ?? "", repo_length, "");
+										get_repo_label (database, pkg), repo_length, "");
 				}
 			}
 			if (summary.to_downgrade.length != 0) {
@@ -609,7 +618,7 @@ namespace Pamac {
 				foreach (unowned Package pkg in summary.to_downgrade) {
 					print_summary_line (pkg.name, name_length, pkg.version, version_length,
 										"(%s)".printf (pkg.installed_version), details_length,
-										pkg.repo ?? "", repo_length,
+										get_repo_label (database, pkg), repo_length,
 										pkg.download_size == 0 ? "" : format_size (pkg.download_size));
 				}
 			}
@@ -618,12 +627,12 @@ namespace Pamac {
 				foreach (unowned Package pkg in summary.to_remove) {
 					print_summary_line (pkg.name, name_length, pkg.version, version_length,
 										get_summary_reason (summary, pkg), details_length,
-										pkg.repo ?? "", repo_length, "");
+										get_repo_label (database, pkg), repo_length, "");
 				}
 				foreach (unowned Package pkg in summary.conflicts_to_remove) {
 					print_summary_line (pkg.name, name_length, pkg.version, version_length,
 										get_summary_reason (summary, pkg), details_length,
-										pkg.repo ?? "", repo_length, "");
+										get_repo_label (database, pkg), repo_length, "");
 				}
 			}
 			stdout.printf ("\n");
