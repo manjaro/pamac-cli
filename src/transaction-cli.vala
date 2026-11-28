@@ -595,6 +595,9 @@ namespace Pamac {
 			if (rsize > 0) {
 				stdout.printf ("%s: %s\n", dgettext (null, "Total removed size"), format_size (rsize));
 			}
+			if (summary.requires_reboot) {
+				stdout.printf ("\n%s.\n", dgettext (null, "A restart will be required"));
+			}
 			stdout.printf ("\n");
 		}
 
