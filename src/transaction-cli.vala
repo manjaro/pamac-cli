@@ -23,6 +23,9 @@ namespace Pamac {
 		string current_action;
 		bool summary_shown;
 		bool commit_transaction_answer;
+		// without a terminal, like in a log, the progress lines are not updated in place
+		bool is_tty;
+		bool downloads_reported;
 		public bool no_confirm { get; set; }
 
 		public TransactionCli (Database database) {
@@ -35,11 +38,13 @@ namespace Pamac {
 			summary_shown = false;
 			no_confirm = false;
 			commit_transaction_answer = false;
+			is_tty = Posix.isatty (Posix.STDOUT_FILENO);
 			// connect to signal
 			emit_action.connect (print_action);
 			emit_action_progress.connect (print_action_progress);
 			emit_download_progress.connect (print_download_progress);
 			emit_hook_progress.connect (print_hook_progress);
+			emit_transaction_progress.connect (print_transaction_progress);
 			emit_script_output.connect (on_emit_script_output);
 			emit_warning.connect (print_warning);
 			emit_error.connect (print_error);
@@ -110,7 +115,38 @@ namespace Pamac {
 			stdout.printf ("\n");
 		}
 
+		void print_transaction_progress (TransactionStep step, uint64 current, uint64 total) {
+			switch (step) {
+				case TransactionStep.BUILDING:
+					// emitted after each build
+					display_current_line ();
+					current_line = "";
+					stdout.printf ("%s (%s/%s)\n", dgettext (null, "Building packages"), current.to_string (), total.to_string ());
+					break;
+				case TransactionStep.DOWNLOADING:
+					if (current < total) {
+						downloads_reported = false;
+					} else if (!is_tty && !downloads_reported) {
+						// the progress of each download is not printed
+						downloads_reported = true;
+						stdout.printf ("%s (%s)\n", dgettext (null, "Downloading packages"), format_size (total));
+					}
+					break;
+				default:
+					// already reported by the action and hook progress
+					break;
+			}
+		}
+
 		void print_download_progress (string action, string status, double progress) {
+			if (!is_tty) {
+				// only print the downloads, the progress lines would fill the output
+				if (action != current_action) {
+					current_action = action;
+					stdout.printf ("%s\n", action);
+				}
+				return;
+			}
 			if (action == current_action) {
 				current_line = status;
 				// clean line
@@ -140,6 +176,13 @@ namespace Pamac {
 			}
 			int width = get_term_width () - action.char_count () - 1;
 			string current_status = "[%s]".printf (status);
+			if (!is_tty) {
+				// only print the completed actions
+				if (progress == 1) {
+					stdout.printf ("%s %s\n", action, current_status);
+				}
+				return;
+			}
 			if (width > current_status.length) {
 				if (progress == 1) {
 					current_line = "";
