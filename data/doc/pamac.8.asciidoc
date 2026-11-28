@@ -283,9 +283,10 @@ Clear the cache except for the latest three package versions
 Can be set to configure the build directory.
 Overridden by --builddir.
 
-*EDITOR*::
-When editor is not configured, use these variables to pick what editor 
-to use when editing PKGBUILDS.
+*VISUAL*, *EDITOR*::
+The editor used to view the build files diff and to edit the build files
+of AUR packages. *VISUAL* is used first, then *EDITOR*, and *nano* when
+none of them is set. The variable must be exported, it can contain arguments.
 
 == CONFIGURATION ==
 See *pamac.conf*(5) for more details on configuring pamac using the

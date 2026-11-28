@@ -668,22 +668,37 @@ namespace Pamac {
 			return ask_user (dgettext (null, "Apply transaction"));
 		}
 
+		// the editor chosen by the user, like other tools: VISUAL first, then EDITOR,
+		// nano with the given option by default or when nano is chosen without arguments
+		string[] get_editor_cmd (string nano_option) {
+			foreach (unowned string name in new string[] {"VISUAL", "EDITOR"}) {
+				unowned string? editor = Environment.get_variable (name);
+				if (editor == null || editor.strip () == "") {
+					continue;
+				}
+				// support args and quotes in the variable
+				string[] argv;
+				try {
+					Shell.parse_argv (editor, out argv);
+				} catch (ShellError e) {
+					warning ("%s: %s", name, e.message);
+					continue;
+				}
+				if (argv.length == 1 && argv[0] == "nano") {
+					break;
+				}
+				return argv;
+			}
+			return {"nano", nano_option};
+		}
+
 		void ask_view_diff (string pkgname) {
 			string diff_path = Path.build_filename (database.get_real_aur_build_dir (), pkgname, "diff");
 			var diff_file = File.new_for_path (diff_path);
 			if (diff_file.query_exists ()) {
 				if (ask_user (dgettext (null, "View %s build files diff").printf (pkgname))) {
-					string[] cmds = {};
-					unowned string? editor = Environment.get_variable ("EDITOR");
-					if (editor == null || editor == "nano") {
-						cmds += "nano";
-						cmds += "-v";
-					} else {
-						// support args in EDITOR
-						foreach (unowned string str in editor.split (" ")) {
-							cmds += str;
-						}
-					}
+					// view only
+					string[] cmds = get_editor_cmd ("-v");
 					cmds += diff_path;
 					try {
 						var process = new Subprocess.newv (cmds, SubprocessFlags.STDIN_INHERIT);
@@ -698,17 +713,8 @@ namespace Pamac {
 		async void edit_single_build_files (string pkgname) {
 			GenericArray<string> files = yield get_build_files_async (pkgname);
 			if (files.length > 0) {
-				string[] cmds = {};
-				unowned string? editor = Environment.get_variable ("EDITOR");
-				if (editor == null || editor == "nano") {
-					cmds += "nano";
-					cmds += "-i";
-				} else {
-					// support args in EDITOR
-					foreach (unowned string str in editor.split (" ")) {
-						cmds += str;
-					}
-				}
+				// auto indent
+				string[] cmds = get_editor_cmd ("-i");
 				foreach (unowned string file in files) {
 					cmds += file;
 				}
